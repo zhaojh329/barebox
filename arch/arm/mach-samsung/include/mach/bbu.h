@@ -13,4 +13,14 @@ static inline int s3c24x0_bbu_nand_register_handler(void)
 }
 #endif
 
+#ifdef CONFIG_BAREBOX_UPDATE_NAND_S5PCXX
+int s5pcxx_bbu_nand_register_handler(void);
+#else
+static inline int s5pcxx_bbu_nand_register_handler(void)
+{
+	return -ENOSYS;
+}
+#endif
+
+
 #endif

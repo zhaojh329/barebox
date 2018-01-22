@@ -64,6 +64,12 @@ config DRIVER_VIDEO_S3C24XX
 	help
 	  Add support for the S3C244x LCD controller.
 
+config DRIVER_VIDEO_S3C
+	bool "S5PCxx framebuffer driver"
+	depends on ARCH_S5PCxx
+	help
+	  Add support for the S5PCxx LCD controller.
+
 config DRIVER_VIDEO_OMAP
 	bool "OMAP framebuffer driver"
 	depends on ARCH_OMAP4

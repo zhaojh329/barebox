@@ -21,29 +21,29 @@
 /* 3322222222221111111111
  * 10987654321098765432109876543210
  *                           ^^^^^^_ Bit offset
- *                      ^^^^^_______ Group Number
- *                  ^^^^____________ Function
- *                 ^________________ initial GPIO out value
- *                ^_________________ Pull up/down feature present
- *              ^^__________________ initial pull up/down setting
+ *                    ^^^^^^^_______ Group Number
+ *                ^^^^______________ Function
+ *               ^__________________ initial GPIO out value
+ *              ^___________________ Pull up/down feature present
+ *            ^^____________________ initial pull up/down setting
  */
 
 #define PIN(group,bit) ((group << 6) + bit)
-#define FUNC(x) (((x) & 0xf) << 11)
-#define GET_FUNC(x) (((x) >> 11) & 0xf)
-#define GET_GROUP(x) (((x) >> 6) & 0x1f)
+#define FUNC(x) (((x) & 0xf) << 13)
+#define GET_FUNC(x) (((x) >> 13) & 0xf)
+#define GET_GROUP(x) (((x) >> 6) & 0x7f)
 #define GET_BIT(x) ((x) & 0x3f)
-#define GET_GPIOVAL(x) (!!((x) & (1 << 15)))
-#define GPIO_OUT (1 << 11)
-#define GPIO_IN (0 << 11)
-#define GPIO_VAL(x) ((!!(x)) << 15)
+#define GET_GPIOVAL(x) (!!((x) & (1 << 17)))
+#define GPIO_OUT (1 << 13)
+#define GPIO_IN (0 << 13)
+#define GPIO_VAL(x) ((!!(x)) << 17)
 #define PUD_MASK 0x3
-#define PUD (1 << 16)
-#define PUD_PRESENT(x) (!!((x) & (1 << 16)))
-#define DISABLE_PUD (0 << 17)
-#define ENABLE_PU (2 << 17)
-#define ENABLE_PD (1 << 17)
-#define GET_PUD(x) (((x) >> 17) & PUD_MASK)
+#define PUD (1 << 18)
+#define PUD_PRESENT(x) (!!((x) & (1 << 18)))
+#define DISABLE_PUD (0 << 19)
+#define ENABLE_PU (2 << 19)
+#define ENABLE_PD (1 << 19)
+#define GET_PUD(x) (((x) >> 19) & PUD_MASK)
 
 /*
  * To have a chance for simple GPIO manipulation routines
@@ -371,40 +371,40 @@
  */
 #define GPF20			(PIN(11,0) | PUD)
 #define GPF20_GPIO		(GPF20 | FUNC(0))
-#define GPF20_LCD_VD_12		(GPF20 | FUNC(2))
-#define GPF20_SYS_VD_12		(GPF20 | FUNC(3))
+#define GPF20_LCD_VD12		(GPF20 | FUNC(2))
+#define GPF20_SYS_VD12		(GPF20 | FUNC(3))
 #define GPF20_V656_DATA_4	(GPF20 | FUNC(4))
 #define GPF21			(PIN(11,1) | PUD)
 #define GPF21_GPIO		(GPF21 | FUNC(0))
-#define GPF21_LCD_VD_13		(GPF21 | FUNC(2))
-#define GPF21_SYS_VD_13		(GPF21 | FUNC(3))
+#define GPF21_LCD_VD13		(GPF21 | FUNC(2))
+#define GPF21_SYS_VD13		(GPF21 | FUNC(3))
 #define GPF21_V656_DATA_5	(GPF21 | FUNC(4))
 #define GPF22			(PIN(11,2) | PUD)
 #define GPF22_GPIO		(GPF22 | FUNC(0))
-#define GPF22_LCD_VD_14		(GPF22 | FUNC(2))
-#define GPF22_SYS_VD_14		(GPF22 | FUNC(3))
+#define GPF22_LCD_VD14		(GPF22 | FUNC(2))
+#define GPF22_SYS_VD14		(GPF22 | FUNC(3))
 #define GPF22_V656_DATA_6	(GPF22 | FUNC(4))
 #define GPF23			(PIN(11,3) | PUD)
 #define GPF23_GPIO		(GPF23 | FUNC(0))
-#define GPF23_LCD_VD_15		(GPF23 | FUNC(2))
-#define GPF23_SYS_VD_15		(GPF23 | FUNC(3))
+#define GPF23_LCD_VD15		(GPF23 | FUNC(2))
+#define GPF23_SYS_VD15		(GPF23 | FUNC(3))
 #define GPF23_V656_DATA_7	(GPF23 | FUNC(4))
 #define GPF24			(PIN(11,4) | PUD)
 #define GPF24_GPIO		(GPF24 | FUNC(0))
-#define GPF24_LCD_VD_16		(GPF24 | FUNC(2))
-#define GPF24_SYS_VD_16		(GPF24 | FUNC(3))
+#define GPF24_LCD_VD16		(GPF24 | FUNC(2))
+#define GPF24_SYS_VD16		(GPF24 | FUNC(3))
 #define GPF25			(PIN(11,5) | PUD)
 #define GPF25_GPIO		(GPF25 | FUNC(0))
-#define GPF25_LCD_VD_17		(GPF25 | FUNC(2))
-#define GPF25_SYS_VD_17		(GPF25 | FUNC(3))
+#define GPF25_LCD_VD17		(GPF25 | FUNC(2))
+#define GPF25_SYS_VD17		(GPF25 | FUNC(3))
 #define GPF26			(PIN(11,6) | PUD)
 #define GPF26_GPIO		(GPF26 | FUNC(0))
-#define GPF26_LCD_VD_18		(GPF26 | FUNC(2))
-#define GPF26_SYS_VD_18		(GPF26 | FUNC(3))
+#define GPF26_LCD_VD18		(GPF26 | FUNC(2))
+#define GPF26_SYS_VD18		(GPF26 | FUNC(3))
 #define GPF27			(PIN(11,7) | PUD)
 #define GPF27_GPIO		(GPF27 | FUNC(0))
-#define GPF27_LCD_VD_19		(GPF27 | FUNC(2))
-#define GPF27_SYS_VD_19		(GPF27 | FUNC(3))
+#define GPF27_LCD_VD19		(GPF27 | FUNC(2))
+#define GPF27_SYS_VD19		(GPF27 | FUNC(3))
 
 /*
  * Group F3: GPIO 0...5
@@ -794,5 +794,128 @@
 #define GPJ44_KP_ROW13	(GPJ44 | FUNC(3))
 #define GPJ44_SROM_ADDR_16to226	(GPJ44 | FUNC(4))
 #define GPJ44_MHL_DE	(GPJ44 | FUNC(5))
+
+
+/*
+ * Group MP01: GPIO 0...7
+ */
+#define GPMP010				(PIN(23,0) | PUD)
+#define GPMP010_GPIO		(GPMP010 | FUNC(0))
+#define GPMP010_SROM_CS0	(GPMP010 | FUNC(2))
+
+#define GPMP011				(PIN(23,1) | PUD)
+#define GPMP011_GPIO		(GPMP011 | FUNC(0))
+#define GPMP011_SROM_CS1	(GPMP011 | FUNC(2))
+
+#define GPMP012				(PIN(23,2) | PUD)
+#define GPMP012_GPIO		(GPMP012 | FUNC(0))
+#define GPMP012_SROM_CS2	(GPMP012 | FUNC(2))
+#define GPMP012_NFCS0		(GPMP012 | FUNC(3))
+
+#define GPMP013				(PIN(23,3) | PUD)
+#define GPMP013_GPIO		(GPMP013 | FUNC(0))
+#define GPMP013_SROM_CS3	(GPMP013 | FUNC(2))
+#define GPMP013_NFCS1		(GPMP013 | FUNC(3))
+
+#define GPMP014				(PIN(23,4) | PUD)
+#define GPMP014_GPIO		(GPMP014 | FUNC(0))
+#define GPMP014_SROM_CS4	(GPMP014 | FUNC(2))
+#define GPMP014_NFCS2		(GPMP014 | FUNC(3))
+
+#define GPMP015				(PIN(23,5) | PUD)
+#define GPMP015_GPIO		(GPMP015 | FUNC(0))
+#define GPMP015_SROM_CS5	(GPMP015 | FUNC(2))
+#define GPMP015_NFCS3		(GPMP015 | FUNC(3))
+
+#define GPMP016				(PIN(23,6) | PUD)
+#define GPMP016_GPIO		(GPMP016 | FUNC(0))
+#define GPMP016_EBI_OE		(GPMP016 | FUNC(2))
+
+#define GPMP017				(PIN(23,7) | PUD)
+#define GPMP017_GPIO		(GPMP017 | FUNC(0))
+#define GPMP017_EBI_WE		(GPMP017 | FUNC(2))
+
+/*
+ * Group MP02: GPIO 0...3
+ */
+#define GPMP020				(PIN(24,0) | PUD)
+
+/*
+ * Group MP03: GPIO 0...7
+ */
+#define GPMP030				(PIN(25,0) | PUD)
+#define GPMP030_GPIO		(GPMP030 | FUNC(0))
+#define GPMP030_NF_CLE		(GPMP030 | FUNC(2))
+
+#define GPMP031				(PIN(25,1) | PUD)
+#define GPMP031_GPIO		(GPMP031 | FUNC(0))
+#define GPMP031_NF_ALE		(GPMP031 | FUNC(2))
+
+#define GPMP032				(PIN(25,2) | PUD)
+#define GPMP032_GPIO		(GPMP032 | FUNC(0))
+#define GPMP032_NF_FWE		(GPMP032 | FUNC(2))
+
+#define GPMP033				(PIN(25,3) | PUD)
+#define GPMP033_GPIO		(GPMP033 | FUNC(0))
+#define GPMP033_NF_FRE		(GPMP033 | FUNC(2))
+
+#define GPMP034				(PIN(25,4) | PUD)
+#define GPMP034_GPIO		(GPMP034 | FUNC(0))
+#define GPMP034_NF_RnB0		(GPMP034 | FUNC(2))
+
+#define GPMP035				(PIN(25,5) | PUD)
+#define GPMP035_GPIO		(GPMP035 | FUNC(0))
+#define GPMP035_NF_RnB1		(GPMP035 | FUNC(2))
+
+#define GPMP036				(PIN(25,6) | PUD)
+#define GPMP036_GPIO		(GPMP036 | FUNC(0))
+#define GPMP036_NF_RnB2		(GPMP036 | FUNC(2))
+
+#define GPMP037				(PIN(25,7) | PUD)
+#define GPMP037_GPIO		(GPMP037 | FUNC(0))
+#define GPMP037_NF_RnB3		(GPMP037 | FUNC(2))
+
+/*
+ * Group H2: GPIO 0...7
+ */
+#define GPH20				(PIN(98,0) | PUD)
+#define GPH20_GPIO			(GPH20 | FUNC(0))
+#define GPH20_KP_COL0		(GPH20 | FUNC(3))
+#define GPH20_EXT_INT16		(GPH20 | FUNC(0XF))
+
+#define GPH21				(PIN(98,1) | PUD)
+#define GPH21_GPIO			(GPH21 | FUNC(0))
+#define GPH21_KP_COL1		(GPH21 | FUNC(3))
+#define GPH21_EXT_INT17		(GPH21 | FUNC(0XF))
+
+#define GPH22				(PIN(98,2) | PUD)
+#define GPH22_GPIO			(GPH22 | FUNC(0))
+#define GPH22_KP_COL2		(GPH22 | FUNC(3))
+#define GPH22_EXT_INT18		(GPH22 | FUNC(0XF))
+
+#define GPH23				(PIN(98,3) | PUD)
+#define GPH23_GPIO			(GPH23 | FUNC(0))
+#define GPH23_KP_COL3		(GPH23 | FUNC(3))
+#define GPH23_EXT_INT19		(GPH23 | FUNC(0XF))
+
+#define GPH24				(PIN(98,4) | PUD)
+#define GPH24_GPIO			(GPH24 | FUNC(0))
+#define GPH24_KP_COL4		(GPH24 | FUNC(3))
+#define GPH24_EXT_INT20		(GPH24 | FUNC(0XF))
+
+#define GPH25				(PIN(98,5) | PUD)
+#define GPH25_GPIO			(GPH25 | FUNC(0))
+#define GPH25_KP_COL5		(GPH25 | FUNC(3))
+#define GPH25_EXT_INT21		(GPH25 | FUNC(0XF))
+
+#define GPH26				(PIN(98,6) | PUD)
+#define GPH26_GPIO			(GPH26 | FUNC(0))
+#define GPH26_KP_COL6		(GPH26 | FUNC(3))
+#define GPH26_EXT_INT22		(GPH26 | FUNC(0XF))
+
+#define GPH27				(PIN(98,7) | PUD)
+#define GPH27_GPIO			(GPH27 | FUNC(0))
+#define GPH27_KP_COL7		(GPH27 | FUNC(3))
+#define GPH27_EXT_INT23		(GPH27 | FUNC(0XF))
 
 #endif /* __MACH_IOMUX_S5PCXX_H */

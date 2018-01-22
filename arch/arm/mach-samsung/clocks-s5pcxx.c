@@ -58,8 +58,29 @@ static uint32_t s5p_get_moutpsysclk(void)
 {
 	if (readl(S5P_CLK_SRC0) & (1 << 24)) /* MUX_PSYS */
 		return s5p_get_a2mclk();
-        else
+	else
 		return s3c_get_mpllclk();
+}
+
+static uint32_t s5p_get_moutdsysclk(void)
+{
+	if (readl(S5P_CLK_SRC0) & (1 << 20)) /* MUX_DSYS */
+		return s5p_get_a2mclk();
+	else
+		return s3c_get_mpllclk();
+}
+
+static uint32_t s5p_get_moutmsysclk(void)
+{
+	if (readl(S5P_CLK_SRC0) & (1 << 16)) /* MUX_MSYS */
+		return s3c_get_mpllclk();
+	else
+		return s3c_get_apllclk();
+}
+
+uint32_t s3c_get_armclk(void)
+{
+	return clkdiv(s5p_get_moutmsysclk(), 0, 0xf);
 }
 
 uint32_t s3c_get_hclk(void)
@@ -70,6 +91,16 @@ uint32_t s3c_get_hclk(void)
 uint32_t s3c_get_pclk(void)
 {
 	return clkdiv(s3c_get_hclk(), 28, 0x7);
+}
+
+uint32_t s3c_get_hclk_dsys(void)
+{
+	return clkdiv(s5p_get_moutdsysclk(), 16, 0xf);
+}
+
+uint32_t s3c_get_pclk_dsys(void)
+{
+	return clkdiv(s3c_get_hclk_dsys(), 20, 0xf);
 }
 
 /* we are using the internal 'uclk1' as the UART source */
@@ -86,12 +117,13 @@ unsigned s3c_get_uart_clk(unsigned src) {
 
 int s5pcxx_dump_clocks(void)
 {
-	printf("refclk:  %7d kHz\n", S5PCXX_CLOCK_REFERENCE / 1000);
-	printf("apll:    %7d kHz\n", s3c_get_apllclk() / 1000);
-	printf("mpll:    %7d kHz\n", s3c_get_mpllclk() / 1000);
-/*	printf("CPU:     %7d kHz\n", s3c_get_cpuclk() / 1000); */
-	printf("hclk:    %7d kHz\n", s3c_get_hclk() / 1000);
-	printf("pclk:    %7d kHz\n", s3c_get_pclk() / 1000);
+	printf("refclk:       %7d kHz\n", S5PCXX_CLOCK_REFERENCE / 1000);
+	printf("armclk:       %7d kHz\n", s3c_get_armclk() / 1000);
+	printf("a2mclk:       %7d kHz\n", s5p_get_a2mclk() / 1000);
+	printf("hclk_dsys:    %7d kHz\n", s3c_get_hclk_dsys() / 1000);
+	printf("pclk_dsys:    %7d kHz\n", s3c_get_pclk_dsys() / 1000);
+	printf("hclk_psys:    %7d kHz\n", s3c_get_hclk() / 1000);
+	printf("pclk_psys:    %7d kHz\n", s3c_get_pclk() / 1000);
 	return 0;
 }
 

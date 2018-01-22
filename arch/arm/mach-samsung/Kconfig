@@ -11,6 +11,8 @@ config ARCH_TEXT_BASE
 	default 0x31fc0000 if MACH_A9M2440
 	default 0x31fc0000 if MACH_A9M2410
 	default 0x23e00000 if MACH_TINY210
+	default 0x2ff00000 if MACH_TQ210
+	default 0x2ff00000 if MACH_OK210
 
 config ARCH_BAREBOX_MAX_BARE_INIT_SIZE
 	hex
@@ -128,6 +130,18 @@ config MACH_TINY210
 	select CPU_S5PV210
 	select S3C_SDRAM_INIT
 
+config MACH_TQ210
+	bool "TQ210"
+	select CPU_S5PV210
+	select S3C_SDRAM_INIT
+	select HAS_DM9000
+
+config MACH_OK210
+	bool "OK210"
+	select CPU_S5PV210
+	select S3C_SDRAM_INIT
+	select HAS_DM9000
+
 endchoice
 
 endif
@@ -169,6 +183,23 @@ config BAREBOX_UPDATE_NAND_S3C24XX
 	bool
 	depends on BAREBOX_UPDATE
 	depends on S3C_NAND_BOOT
+	default y
+
+config S5PCXX_NAND_BOOT
+	bool
+	prompt "Booting from NAND"
+	depends on ARCH_S5PCxx
+	select MTD
+	select NAND
+	select NAND_S5PCXX
+	help
+	  Add generic support to boot from NAND flash. Image loading will be
+	  skipped if the code is running from NOR or already from SDRAM.
+
+config BAREBOX_UPDATE_NAND_S5PCXX
+	bool
+	depends on BAREBOX_UPDATE
+	depends on S5PCXX_NAND_BOOT
 	default y
 
 endmenu

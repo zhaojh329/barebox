@@ -191,6 +191,7 @@ config ARCH_S5PCxx
 	select ARCH_SAMSUNG
 	select CPU_V7
 	select GENERIC_GPIO
+	select HAS_DEBUG_LL
 
 config ARCH_S3C64xx
 	bool "Samsung S3C64xx"

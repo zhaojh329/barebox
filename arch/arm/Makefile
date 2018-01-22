@@ -114,6 +114,8 @@ board-$(CONFIG_MACH_MINI6410)			+= friendlyarm-mini6410
 board-$(CONFIG_MACH_PCM027)			+= phytec-phycore-pxa270
 board-$(CONFIG_MACH_TINY210)			+= friendlyarm-tiny210
 board-$(CONFIG_MACH_TINY6410)			+= friendlyarm-tiny6410
+board-$(CONFIG_MACH_TQ210)              += embedsky-tq210
+board-$(CONFIG_MACH_OK210)              += forlinx-ok210
 
 machdirs := $(patsubst %,arch/arm/mach-%/,$(machine-y))
 

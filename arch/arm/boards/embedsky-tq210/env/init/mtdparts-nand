@@ -1,0 +1,6 @@
+#!/bin/sh
+
+mtdparts="256k(nand0.barebox),128k(nand0.bareboxenv),4M(nand0.kernel),-(nand0.rootfs)"
+kernelname="nand"
+
+mtdparts-add -b -d nand0 -k ${kernelname} -p ${mtdparts}
