@@ -1,0 +1,9 @@
+#!/bin/sh
+
+global -r boot.default
+
+# network
+nv dev.eth0.mode=static
+nv dev.eth0.ipaddr=192.168.0.17
+nv dev.eth0.netmask=255.255.255.0
+nv net.server=192.168.0.197

@@ -233,6 +233,8 @@ static int tq210_devices_init(void)
 	add_generic_device("s3c_fb", DEVICE_ID_DYNAMIC, NULL,
 				S5P_LCD_BASE, 0x100, IORESOURCE_MEM, &s3c_fb_data);
 
+    pr_info("xxxxxxxxx12\n");
+
 	return 0;
 }
 device_initcall(tq210_devices_init);

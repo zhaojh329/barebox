@@ -1,7 +1,0 @@
-#!/bin/sh
-
-ip=static
-ipaddr=192.168.0.123
-netmask=255.255.255.0
-gateway=192.168.0.1
-serverip=192.168.0.100
