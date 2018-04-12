@@ -163,7 +163,7 @@ void __bare_init barebox_arm_reset_vector(void)
 
 	debug_led(1, 1);
 
-	if (! load_stage2((void*)(ld_var(_text) - 16),
+	if (! load_stage2((void*)(_text - 16),
 #ifdef CONFIG_PBL_IMAGE		
 		barebox_pbl_size + barebox_image_size + 16)) {
 #else
@@ -176,7 +176,7 @@ void __bare_init barebox_arm_reset_vector(void)
 
 	puts_ll("jump to sdram...\n");
 	
-	jump_sdram(IRAM_CODE_BASE - ld_var(_text));
+	jump_sdram(IRAM_CODE_BASE - (unsigned long)_text);
 
 	debug_led(1, 1);
 
