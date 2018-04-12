@@ -11,8 +11,6 @@ config ARCH_TEXT_BASE
 	default 0x31fc0000 if MACH_A9M2440
 	default 0x31fc0000 if MACH_A9M2410
 	default 0x23e00000 if MACH_TINY210
-	default 0x2ff00000 if MACH_TQ210
-	default 0x2ff00000 if MACH_OK210
 
 config ARCH_BAREBOX_MAX_BARE_INIT_SIZE
 	hex
