@@ -63,7 +63,7 @@ struct console_device {
 	const char *linux_console_name;
 
 	struct cdev devfs;
-	struct file_operations fops;
+	struct cdev_operations fops;
 };
 
 int console_register(struct console_device *cdev);
@@ -93,5 +93,7 @@ void pbl_set_putc(void (*putcf)(void *ctx, int c), void *ctx);
 #else
 static inline void pbl_set_putc(void (*putcf)(void *ctx, int c), void *ctx) {}
 #endif
+
+bool console_allow_color(void);
 
 #endif

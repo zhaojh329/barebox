@@ -11,7 +11,7 @@ void *read_file(const char *filename, size_t *size);
 int read_file_2(const char *filename, size_t *size, void **outbuf,
 		loff_t max_size);
 
-int write_file(const char *filename, void *buf, size_t size);
+int write_file(const char *filename, const void *buf, size_t size);
 
 int copy_file(const char *src, const char *dst, int verbose);
 
@@ -25,5 +25,9 @@ int open_and_lseek(const char *filename, int mode, loff_t pos);
 int make_directory(const char *pathname);
 
 int unlink_recursive(const char *path, char **failedpath);
+
+char *make_temp(const char *template);
+
+int cache_file(const char *path, char **newpath);
 
 #endif /* __LIBFILE_H */

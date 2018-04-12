@@ -73,9 +73,20 @@ struct image_data {
 	char *oftree_file;
 	char *oftree_part;
 
+	const void *fit_kernel;
+	unsigned long fit_kernel_size;
+	void *fit_config;
+
 	struct device_node *of_root_node;
 	struct fdt_header *oftree;
 	struct resource *oftree_res;
+
+	/*
+	 * The first PAGE_SIZE bytes of the OS image. Can be used by the image
+	 * handlers to analyze the OS image before actually loading the bulk of
+	 * it.
+	 */
+	void *os_header;
 
 	enum bootm_verify verify;
 	int verbose;

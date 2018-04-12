@@ -129,6 +129,11 @@ struct property *of_find_property(const struct device_node *np,
 }
 EXPORT_SYMBOL(of_find_property);
 
+static const void *of_property_get_value(struct property *pp)
+{
+	return pp->value ? pp->value : pp->value_const;
+}
+
 static void of_alias_add(struct alias_prop *ap, struct device_node *np,
 			 int id, const char *stem, int stem_len)
 {
@@ -178,7 +183,7 @@ void of_alias_scan(void)
 		    !of_prop_cmp(pp->name, "linux,phandle"))
 			continue;
 
-		np = of_find_node_by_path(pp->value);
+		np = of_find_node_by_path(of_property_get_value(pp));
 		if (!np)
 			continue;
 
@@ -374,7 +379,10 @@ const void *of_get_property(const struct device_node *np, const char *name,
 {
 	struct property *pp = of_find_property(np, name, lenp);
 
-	return pp ? pp->value : NULL;
+	if (!pp)
+		return NULL;
+
+	return of_property_get_value(pp);
 }
 EXPORT_SYMBOL(of_get_property);
 
@@ -678,19 +686,21 @@ EXPORT_SYMBOL(of_match);
  * property data isn't large enough.
  *
  */
-static void *of_find_property_value_of_size(const struct device_node *np,
+static const void *of_find_property_value_of_size(const struct device_node *np,
 			const char *propname, u32 len)
 {
 	struct property *prop = of_find_property(np, propname, NULL);
+	const void *value;
 
 	if (!prop)
 		return ERR_PTR(-EINVAL);
-	if (!prop->value)
+	value = of_property_get_value(prop);
+	if (!value)
 		return ERR_PTR(-ENODATA);
 	if (len > prop->length)
 		return ERR_PTR(-EOVERFLOW);
 
-	return prop->value;
+	return value;
 }
 
 /**
@@ -867,13 +877,16 @@ int of_property_read_string(struct device_node *np, const char *propname,
 				const char **out_string)
 {
 	struct property *prop = of_find_property(np, propname, NULL);
+	const void *value;
+
 	if (!prop)
 		return -EINVAL;
-	if (!prop->value)
+	value = of_property_get_value(prop);
+	if (!value)
 		return -ENODATA;
-	if (strnlen(prop->value, prop->length) >= prop->length)
+	if (strnlen(value, prop->length) >= prop->length)
 		return -EILSEQ;
-	*out_string = prop->value;
+	*out_string = value;
 	return 0;
 }
 EXPORT_SYMBOL_GPL(of_property_read_string);
@@ -903,15 +916,17 @@ int of_property_read_string_index(struct device_node *np, const char *propname,
 	int i = 0;
 	size_t l = 0, total = 0;
 	const char *p;
+	const void *value;
 
 	if (!prop)
 		return -EINVAL;
-	if (!prop->value)
+	value = of_property_get_value(prop);
+	if (!value)
 		return -ENODATA;
-	if (strnlen(prop->value, prop->length) >= prop->length)
+	if (strnlen(value, prop->length) >= prop->length)
 		return -EILSEQ;
 
-	p = prop->value;
+	p = value;
 
 	for (i = 0; total < prop->length; total += l, p += l) {
 		l = strlen(p) + 1;
@@ -943,10 +958,11 @@ int of_property_match_string(struct device_node *np, const char *propname,
 
 	if (!prop)
 		return -EINVAL;
-	if (!prop->value)
+
+	p = of_property_get_value(prop);
+	if (!p)
 		return -ENODATA;
 
-	p = prop->value;
 	end = p + prop->length;
 
 	for (i = 0; p < end; i++, p += l) {
@@ -979,15 +995,17 @@ int of_property_count_strings(struct device_node *np, const char *propname)
 	int i = 0;
 	size_t l = 0, total = 0;
 	const char *p;
+	const void *value;
 
 	if (!prop)
 		return -EINVAL;
-	if (!prop->value)
+	value = of_property_get_value(prop);
+	if (!value)
 		return -ENODATA;
-	if (strnlen(prop->value, prop->length) >= prop->length)
+	if (strnlen(value, prop->length) >= prop->length)
 		return -EILSEQ;
 
-	p = prop->value;
+	p = value;
 
 	for (i = 0; total < prop->length; total += l, p += l, i++)
 		l = strlen(p) + 1;
@@ -1000,17 +1018,20 @@ const __be32 *of_prop_next_u32(struct property *prop, const __be32 *cur,
 			u32 *pu)
 {
 	const void *curv = cur;
+	const void *value;
 
 	if (!prop)
 		return NULL;
 
+	value = of_property_get_value(prop);
+
 	if (!cur) {
-		curv = prop->value;
+		curv = value;
 		goto out_val;
 	}
 
 	curv += sizeof(*cur);
-	if (curv >= prop->value + prop->length)
+	if (curv >= value + prop->length)
 		return NULL;
 
 out_val:
@@ -1022,15 +1043,18 @@ EXPORT_SYMBOL_GPL(of_prop_next_u32);
 const char *of_prop_next_string(struct property *prop, const char *cur)
 {
 	const void *curv = cur;
+	const void *value;
 
 	if (!prop)
 		return NULL;
 
+	value = of_property_get_value(prop);
+
 	if (!cur)
-		return prop->value;
+		return value;
 
 	curv += strlen(cur) + 1;
-	if (curv >= prop->value + prop->length)
+	if (curv >= value + prop->length)
 		return NULL;
 
 	return curv;
@@ -1777,7 +1801,7 @@ void of_print_nodes(struct device_node *node, int indent)
 		printf("%s", p->name);
 		if (p->length) {
 			printf(" = ");
-			of_print_property(p->value, p->length);
+			of_print_property(of_property_get_value(p), p->length);
 		}
 		printf(";\n");
 	}
@@ -1817,6 +1841,18 @@ struct device_node *of_new_node(struct device_node *parent, const char *name)
 	return node;
 }
 
+/**
+ * of_new_property - Add a new property to a node
+ * @node:	device node to which the property is added
+ * @name:	Name of the new property
+ * @data:	Value of the property (can be NULL)
+ * @len:	Length of the value
+ *
+ * This adds a new property to a device node. @data is copied and no longer needed
+ * after calling this function.
+ *
+ * Return: A pointer to the new property
+ */
 struct property *of_new_property(struct device_node *node, const char *name,
 		const void *data, int len)
 {
@@ -1829,6 +1865,35 @@ struct property *of_new_property(struct device_node *node, const char *name,
 
 	if (data)
 		memcpy(prop->value, data, len);
+
+	list_add_tail(&prop->list, &node->properties);
+
+	return prop;
+}
+
+/**
+ * of_new_property_const - Add a new property to a node
+ * @node:	device node to which the property is added
+ * @name:	Name of the new property
+ * @data:	Value of the property (can be NULL)
+ * @len:	Length of the value
+ *
+ * This adds a new property to a device node. @data is used directly in the
+ * property and must be valid until the property is deleted again or set to
+ * another value. Normally you shouldn't use this function, use of_new_property()
+ * instead.
+ *
+ * Return: A pointer to the new property
+ */
+struct property *of_new_property_const(struct device_node *node, const char *name,
+		const void *data, int len)
+{
+	struct property *prop;
+
+	prop = xzalloc(sizeof(*prop));
+	prop->name = xstrdup(name);
+	prop->length = len;
+	prop->value_const = data;
 
 	list_add_tail(&prop->list, &node->properties);
 
@@ -2174,6 +2239,69 @@ int of_device_disable_path(const char *path)
 }
 
 /**
+ * of_get_reproducible_name() - get a reproducible name of a node
+ * @node: The node to get a name from
+ *
+ * This function constructs a reproducible name for a node. This name can be
+ * used to find the same node in another device tree. The name is constructed
+ * from different patterns which are appended to each other.
+ * - If a node has no "reg" property, the name of the node is used in angle
+ *   brackets, prepended with the result of the parent node
+ * - If the parent node has a "ranges" property then the address in MMIO space
+ *   is used in square brackets
+ * - If a node has a "reg" property, but is not translatable in MMIO space then
+ *   the start address is used in curly brackets, prepended with the result of
+ *   the parent node.
+ *
+ * Returns a dynamically allocated string containing the name
+ */
+char *of_get_reproducible_name(struct device_node *node)
+{
+	const __be32 *reg;
+	u64 addr;
+	u64 offset;
+	int na;
+	char *str, *res;
+
+	if (!node)
+		return 0;
+
+	reg = of_get_property(node, "reg", NULL);
+        if (!reg) {
+		str = of_get_reproducible_name(node->parent);
+		res = basprintf("%s<%s>", str, node->name);
+		free(str);
+		return res;
+	}
+
+	if (node->parent && of_get_property(node->parent, "ranges", NULL)) {
+		addr = of_translate_address(node, reg);
+		return basprintf("[0x%llx]", addr);
+	}
+
+	na = of_n_addr_cells(node);
+
+	offset = of_read_number(reg, na);
+
+	str = of_get_reproducible_name(node->parent);
+	res = basprintf("%s{%llx}", str, offset);
+	free(str);
+
+	return res;
+}
+
+struct device_node *of_find_node_by_reproducible_name(struct device_node *from,
+						      const char *name)
+{
+	struct device_node *np;
+
+	of_tree_for_each_node_from(np, from)
+		if (!of_node_cmp(of_get_reproducible_name(np), name))
+			return np;
+	return NULL;
+}
+
+/**
  * of_graph_parse_endpoint() - parse common endpoint node properties
  * @node: pointer to endpoint device_node
  * @endpoint: pointer to the OF endpoint data structure
@@ -2360,3 +2488,37 @@ int of_graph_port_is_available(struct device_node *node)
 	return available;
 }
 EXPORT_SYMBOL(of_graph_port_is_available);
+
+/**
+ * of_get_machine_compatible - get first compatible string from the root node.
+ *
+ * Returns the string or NULL.
+ */
+const char *of_get_machine_compatible(void)
+{
+	struct property *prop;
+	const char *name, *p;
+
+	if (!root_node)
+		return NULL;
+
+	prop = of_find_property(root_node, "compatible", NULL);
+	name = of_prop_next_string(prop, NULL);
+	if (!name)
+		return NULL;
+
+	p = strchr(name, ',');
+	return p ? p + 1 : name;
+}
+EXPORT_SYMBOL(of_get_machine_compatible);
+
+static int of_init_hostname(void)
+{
+	const char *name;
+
+	name = of_get_machine_compatible();
+	barebox_set_hostname_no_overwrite(name ?: "barebox");
+
+	return 0;
+}
+late_initcall(of_init_hostname);

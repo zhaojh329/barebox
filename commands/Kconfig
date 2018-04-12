@@ -234,7 +234,7 @@ config CMD_VERSION
 	depends on BANNER
 	prompt "version"
 	help
-	  Pring barebox version. Example:
+	  Print barebox version. Example:
 
 	  barebox 2014.05.0-00142-gb289373 #177 Mon May 12 20:35:55 CEST 2014
 
@@ -348,7 +348,7 @@ config CMD_BOOTM
 config CMD_BOOTU
 	tristate
 	default y
-	depends on ARM
+	depends on ARM && !CPU_64v8
 	prompt "bootu"
 	help
 	  Boot into already loaded Linux kernel, which must be raw (uncompressed).
@@ -357,7 +357,7 @@ config CMD_BOOTU
 
 config CMD_BOOTZ
 	tristate
-	depends on ARM
+	depends on ARM && !CPU_64v8
 	prompt "bootz"
 	help
 	  Boot Linux zImage
@@ -1722,7 +1722,7 @@ config CMD_GPIO
 
 	  gpio_direction_output - set direction of a GPIO pin to output
 
-	  Usage: gpio_direction_output GPIO
+	  Usage: gpio_direction_output GPIO VALUE
 
 
 	  gpio_get_value - return value of a GPIO pin

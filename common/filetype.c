@@ -21,10 +21,12 @@
 #include <asm/unaligned.h>
 #include <fcntl.h>
 #include <fs.h>
+#include <libfile.h>
 #include <malloc.h>
 #include <errno.h>
 #include <envfs.h>
 #include <disks.h>
+#include <image-sparse.h>
 
 struct filetype_str {
 	const char *name;	/* human readable filetype */
@@ -64,6 +66,8 @@ static const struct filetype_str filetype_str[] = {
 	[filetype_mxs_bootstream] = { "Freescale MXS bootstream", "mxsbs" },
 	[filetype_socfpga_xload] = { "SoCFPGA prebootloader image", "socfpga-xload" },
 	[filetype_kwbimage_v1] = { "MVEBU kwbimage (v1)", "kwb" },
+	[filetype_android_sparse] = { "Android sparse image", "sparse" },
+	[filetype_arm64_linux_image] = { "ARM aarch64 Linux image", "aarch64-linux" },
 };
 
 const char *file_type_to_string(enum filetype f)
@@ -293,6 +297,8 @@ enum filetype file_detect_type(const void *_buf, size_t bufsize)
 		return filetype_mips_barebox;
 	if (buf[0] == be32_to_cpu(0x534F4659))
 		return filetype_bpk;
+	if (le32_to_cpu(buf[14]) == 0x644d5241)
+		return filetype_arm64_linux_image;
 	if ((buf8[0] == 0x5a || buf8[0] == 0x69 || buf8[0] == 0x78 ||
 	     buf8[0] == 0x8b || buf8[0] == 0x9c) &&
 	    buf8[0x1] == 0 && buf8[0x2] == 0 && buf8[0x3] == 0 &&
@@ -300,6 +306,9 @@ enum filetype file_detect_type(const void *_buf, size_t bufsize)
 	    buf8[0x1c] == 0 && buf8[0x1d] == 0 &&
 	    (buf8[0x1e] == 0 || buf8[0x1e] == 1))
 		return filetype_kwbimage_v1;
+
+	if (is_sparse_image(_buf))
+		return filetype_android_sparse;
 
 	if (bufsize < 64)
 		return filetype_unknown;
@@ -338,13 +347,13 @@ enum filetype file_detect_type(const void *_buf, size_t bufsize)
 	return filetype_unknown;
 }
 
-enum filetype file_name_detect_type(const char *filename)
+enum filetype file_name_detect_type_offset(const char *filename, loff_t pos)
 {
 	int fd, ret;
 	void *buf;
 	enum filetype type = filetype_unknown;
 
-	fd = open(filename, O_RDONLY);
+	fd = open_and_lseek(filename, O_RDONLY, pos);
 	if (fd < 0)
 		return fd;
 
@@ -361,6 +370,11 @@ err_out:
 	free(buf);
 
 	return type;
+}
+
+enum filetype file_name_detect_type(const char *filename)
+{
+	return file_name_detect_type_offset(filename, 0);
 }
 
 enum filetype cdev_detect_type(const char *name)

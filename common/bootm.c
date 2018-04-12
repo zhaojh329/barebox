@@ -111,13 +111,14 @@ int bootm_load_os(struct image_data *data, unsigned long load_address)
 		return -EINVAL;
 
 	if (data->os_fit) {
+		const void *kernel = data->fit_kernel;
+		unsigned long kernel_size = data->fit_kernel_size;
+
 		data->os_res = request_sdram_region("kernel",
-				load_address,
-				data->os_fit->kernel_size);
+				load_address, kernel_size);
 		if (!data->os_res)
 			return -ENOMEM;
-		memcpy((void *)load_address, data->os_fit->kernel,
-		       data->os_fit->kernel_size);
+		memcpy((void *)load_address, kernel, kernel_size);
 		return 0;
 	}
 
@@ -150,7 +151,8 @@ bool bootm_has_initrd(struct image_data *data)
 	if (!IS_ENABLED(CONFIG_BOOTM_INITRD))
 		return false;
 
-	if (data->os_fit && data->os_fit->initrd)
+	if (IS_ENABLED(CONFIG_FITIMAGE) && data->os_fit &&
+	    fit_has_image(data->os_fit, data->fit_config, "ramdisk"))
 		return true;
 
 	if (data->initrd_file)
@@ -211,14 +213,20 @@ int bootm_load_initrd(struct image_data *data, unsigned long load_address)
 	if (data->initrd_res)
 		return 0;
 
-	if (data->os_fit && data->os_fit->initrd) {
+	if (IS_ENABLED(CONFIG_FITIMAGE) && data->os_fit &&
+	    fit_has_image(data->os_fit, data->fit_config, "ramdisk")) {
+		const void *initrd;
+		unsigned long initrd_size;
+
+		ret = fit_open_image(data->os_fit, data->fit_config, "ramdisk",
+				     &initrd, &initrd_size);
+
 		data->initrd_res = request_sdram_region("initrd",
 				load_address,
-				data->os_fit->initrd_size);
+				initrd_size);
 		if (!data->initrd_res)
 			return -ENOMEM;
-		memcpy((void *)load_address, data->os_fit->initrd,
-		       data->os_fit->initrd_size);
+		memcpy((void *)load_address, initrd, initrd_size);
 		printf("Loaded initrd from FIT image\n");
 		goto done1;
 	}
@@ -335,11 +343,17 @@ int bootm_load_devicetree(struct image_data *data, unsigned long load_address)
 	if (!IS_ENABLED(CONFIG_OFTREE))
 		return 0;
 
-	if (data->os_fit && data->os_fit->oftree) {
-		data->of_root_node = of_unflatten_dtb(data->os_fit->oftree);
+	if (IS_ENABLED(CONFIG_FITIMAGE) && data->os_fit &&
+	    fit_has_image(data->os_fit, data->fit_config, "fdt")) {
+		const void *of_tree;
+		unsigned long of_size;
 
-		if (IS_ERR(data->of_root_node))
-			data->of_root_node = NULL;
+		ret = fit_open_image(data->os_fit, data->fit_config, "fdt",
+				     &of_tree, &of_size);
+		if (ret)
+			return ret;
+
+		data->of_root_node = of_unflatten_dtb(of_tree);
 	} else if (data->oftree_file) {
 		size_t size;
 
@@ -429,7 +443,7 @@ int bootm_get_os_size(struct image_data *data)
 	if (data->os)
 		return uimage_get_size(data->os, uimage_part_num(data->os_part));
 	if (data->os_fit)
-		return data->os_fit->kernel_size;
+		return data->fit_kernel_size;
 
 	if (data->os_file) {
 		struct stat s;
@@ -515,6 +529,7 @@ int bootm_boot(struct bootm_data *bootm_data)
 	struct image_handler *handler;
 	int ret;
 	enum filetype os_type;
+	size_t size;
 
 	if (!bootm_data->os_file) {
 		printf("no image given\n");
@@ -534,7 +549,13 @@ int bootm_boot(struct bootm_data *bootm_data)
 	data->os_address = bootm_data->os_address;
 	data->os_entry = bootm_data->os_entry;
 
-	os_type = file_name_detect_type(data->os_file);
+	ret = read_file_2(data->os_file, &size, &data->os_header, PAGE_SIZE);
+	if (ret < 0 && ret != -EFBIG)
+		goto err_out;
+	if (size < PAGE_SIZE)
+		goto err_out;
+
+	os_type = file_detect_type(data->os_header, PAGE_SIZE);
 	if ((int)os_type < 0) {
 		printf("could not open %s: %s\n", data->os_file,
 				strerror(-os_type));
@@ -568,7 +589,7 @@ int bootm_boot(struct bootm_data *bootm_data)
 	if (IS_ENABLED(CONFIG_FITIMAGE) && os_type == filetype_oftree) {
 		struct fit_handle *fit;
 
-		fit = fit_open(data->os_file, data->os_part, data->verbose, data->verify);
+		fit = fit_open(data->os_file, data->verbose, data->verify);
 		if (IS_ERR(fit)) {
 			printf("Loading FIT image %s failed with: %s\n", data->os_file,
 			       strerrorp(fit));
@@ -577,6 +598,20 @@ int bootm_boot(struct bootm_data *bootm_data)
 		}
 
 		data->os_fit = fit;
+
+		data->fit_config = fit_open_configuration(data->os_fit,
+							  data->os_part);
+		if (IS_ERR(data->fit_config)) {
+			printf("Cannot open FIT image configuration '%s'\n",
+			       data->os_part ? data->os_part : "default");
+			ret = PTR_ERR(data->fit_config);
+			goto err_out;
+		}
+
+		ret = fit_open_image(data->os_fit, data->fit_config, "kernel",
+				     &data->fit_kernel, &data->fit_kernel_size);
+		if (ret)
+			goto err_out;
 	}
 
 	if (os_type == filetype_uimage) {
@@ -646,6 +681,7 @@ err_out:
 		of_delete_node(data->of_root_node);
 
 	globalvar_remove("linux.bootargs.bootm.appendroot");
+	free(data->os_header);
 	free(data->os_file);
 	free(data->oftree_file);
 	free(data->initrd_file);

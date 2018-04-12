@@ -32,11 +32,14 @@
 #include <ubiformat.h>
 #include <stdlib.h>
 #include <file-list.h>
+#include <magicvar.h>
+#include <linux/sizes.h>
 #include <progress.h>
 #include <environment.h>
 #include <globalvar.h>
 #include <restart.h>
 #include <console_countdown.h>
+#include <image-sparse.h>
 #include <usb/ch9.h>
 #include <usb/gadget.h>
 #include <usb/fastboot.h>
@@ -45,6 +48,7 @@
 #include <linux/compiler.h>
 #include <linux/stat.h>
 #include <linux/mtd/mtd-abi.h>
+#include <linux/mtd/mtd.h>
 
 #define FASTBOOT_VERSION		"0.4"
 
@@ -56,6 +60,8 @@
 
 #define EP_BUFFER_SIZE			4096
 
+static unsigned int fastboot_max_download_size = SZ_8M;
+
 struct fb_variable {
 	char *name;
 	char *value;
@@ -65,15 +71,28 @@ struct fb_variable {
 struct f_fastboot {
 	struct usb_function func;
 
-	/* IN/OUT EP's and correspoinding requests */
+	/* IN/OUT EP's and corresponding requests */
 	struct usb_ep *in_ep, *out_ep;
 	struct usb_request *in_req, *out_req;
 	struct file_list *files;
+	int (*cmd_exec)(struct f_fastboot *, const char *cmd);
+	int (*cmd_flash)(struct f_fastboot *, struct file_list_entry *entry,
+			 const char *filename, const void *buf, size_t len);
 	int download_fd;
+	void *buf;
+
 	size_t download_bytes;
 	size_t download_size;
 	struct list_head variables;
 };
+
+static inline bool fastboot_download_to_buf(struct f_fastboot *f_fb)
+{
+	if (IS_ENABLED(CONFIG_USB_GADGET_FASTBOOT_BUF))
+		return true;
+	else
+		return false;
+}
 
 static inline struct f_fastboot *func_to_fastboot(struct usb_function *f)
 {
@@ -311,11 +330,17 @@ static int fastboot_bind(struct usb_configuration *c, struct usb_function *f)
 	struct fb_variable *var;
 
 	f_fb->files = opts->files;
+	f_fb->cmd_exec = opts->cmd_exec;
+	f_fb->cmd_flash = opts->cmd_flash;
 
 	var = fb_addvar(f_fb, "version");
 	fb_setvar(var, "0.4");
 	var = fb_addvar(f_fb, "bootloader-version");
 	fb_setvar(var, release_string);
+	if (IS_ENABLED(USB_GADGET_FASTBOOT_SPARSE)) {
+		var = fb_addvar(f_fb, "max-download-size");
+		fb_setvar(var, "%u", fastboot_max_download_size);
+	}
 
 	if (IS_ENABLED(CONFIG_BAREBOX_UPDATE) && opts->export_bbu)
 		bbu_handlers_iterate(fastboot_add_bbu_variables, f_fb);
@@ -526,7 +551,7 @@ static int fastboot_tx_write(struct f_fastboot *f_fb, const char *buffer, unsign
 	return 0;
 }
 
-static int fastboot_tx_print(struct f_fastboot *f_fb, const char *fmt, ...)
+int fastboot_tx_print(struct f_fastboot *f_fb, const char *fmt, ...)
 {
 	char buf[64];
 	va_list ap;
@@ -547,10 +572,8 @@ static void compl_do_reset(struct usb_ep *ep, struct usb_request *req)
 	restart_machine();
 }
 
-static void cb_reboot(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_reboot(struct f_fastboot *f_fb, const char *cmd)
 {
-	struct f_fastboot *f_fb = req->context;
-
 	f_fb->in_req->complete = compl_do_reset;
 	fastboot_tx_print(f_fb, "OKAY");
 }
@@ -562,9 +585,8 @@ static int strcmp_l1(const char *s1, const char *s2)
 	return strncmp(s1, s2, strlen(s1));
 }
 
-static void cb_getvar(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_getvar(struct f_fastboot *f_fb, const char *cmd)
 {
-	struct f_fastboot *f_fb = req->context;
 	struct fb_variable *var;
 
 	pr_debug("getvar: \"%s\"\n", cmd);
@@ -598,10 +620,14 @@ static void rx_handler_dl_image(struct usb_ep *ep, struct usb_request *req)
 		return;
 	}
 
-	ret = write(f_fb->download_fd, buffer, req->actual);
-	if (ret < 0) {
-		fastboot_tx_print(f_fb, "FAIL%s", strerror(-ret));
-		return;
+	if (fastboot_download_to_buf(f_fb)) {
+		memcpy(f_fb->buf + f_fb->download_bytes, buffer, req->actual);
+	} else {
+		ret = write(f_fb->download_fd, buffer, req->actual);
+		if (ret < 0) {
+			fastboot_tx_print(f_fb, "FAIL%s", strerror(-ret));
+			return;
+		}
 	}
 
 	f_fb->download_bytes += req->actual;
@@ -630,10 +656,8 @@ static void rx_handler_dl_image(struct usb_ep *ep, struct usb_request *req)
 	usb_ep_queue(ep, req);
 }
 
-static void cb_download(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_download(struct f_fastboot *f_fb, const char *cmd)
 {
-	struct f_fastboot *f_fb = req->context;
-
 	f_fb->download_size = simple_strtoul(cmd, NULL, 16);
 	f_fb->download_bytes = 0;
 
@@ -641,15 +665,26 @@ static void cb_download(struct usb_ep *ep, struct usb_request *req, const char *
 
 	init_progression_bar(f_fb->download_size);
 
-	f_fb->download_fd = open(FASTBOOT_TMPFILE, O_WRONLY | O_CREAT | O_TRUNC);
-	if (f_fb->download_fd < 0) {
-		fastboot_tx_print(f_fb, "FAILInternal Error");
-		return;
+	if (fastboot_download_to_buf(f_fb)) {
+		free(f_fb->buf);
+		f_fb->buf = malloc(f_fb->download_size);
+		if (!f_fb->buf) {
+			fastboot_tx_print(f_fb, "FAILnot enough memory");
+			return;
+		}
+	} else {
+		f_fb->download_fd = open(FASTBOOT_TMPFILE, O_WRONLY | O_CREAT | O_TRUNC);
+		if (f_fb->download_fd < 0) {
+			fastboot_tx_print(f_fb, "FAILInternal Error");
+			return;
+		}
 	}
 
 	if (!f_fb->download_size) {
 		fastboot_tx_print(f_fb, "FAILdata invalid size");
 	} else {
+		struct usb_request *req = f_fb->out_req;
+		struct usb_ep *ep = f_fb->out_ep;
 		fastboot_tx_print(f_fb, "DATA%08x", f_fb->download_size);
 		req->complete = rx_handler_dl_image;
 		req->length = EP_BUFFER_SIZE;
@@ -678,22 +713,219 @@ static void do_bootm_on_complete(struct usb_ep *ep, struct usb_request *req)
 		pr_err("Booting failed\n");
 }
 
-static void __maybe_unused cb_boot(struct usb_ep *ep, struct usb_request *req,
-				   const char *opt)
+static void __maybe_unused cb_boot(struct f_fastboot *f_fb, const char *opt)
 {
-	struct f_fastboot *f_fb = req->context;
-
 	f_fb->in_req->complete = do_bootm_on_complete;
 	fastboot_tx_print(f_fb, "OKAY");
 }
 
-static void cb_flash(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static struct mtd_info *get_mtd(struct f_fastboot *f_fb, const char *filename)
 {
-	struct f_fastboot *f_fb = req->context;
+	int fd, ret;
+	struct mtd_info_user meminfo;
+
+	fd = open(filename, O_RDONLY);
+	if (fd < 0)
+		return ERR_PTR(-errno);
+
+	ret = ioctl(fd, MEMGETINFO, &meminfo);
+
+	close(fd);
+
+	if (ret)
+		return ERR_PTR(ret);
+
+	return meminfo.mtd;
+}
+
+static int do_ubiformat(struct f_fastboot *f_fb, struct mtd_info *mtd,
+			const char *file, const void *buf, size_t len)
+{
+	struct ubiformat_args args = {
+		.yes = 1,
+		.image = file,
+		.image_buf = buf,
+		.image_size = len,
+	};
+
+	if (!file)
+		args.novtbl = 1;
+
+	if (!IS_ENABLED(CONFIG_UBIFORMAT)) {
+		fastboot_tx_print(f_fb, "FAILubiformat is not available");
+		return -ENODEV;
+	}
+
+	return ubiformat(mtd, &args);
+}
+
+
+static int check_ubi(struct f_fastboot *f_fb, struct file_list_entry *fentry,
+		     enum filetype filetype)
+{
+	struct mtd_info *mtd;
+
+	mtd = get_mtd(f_fb, fentry->filename);
+
+	/*
+	 * Issue a warning when we are about to write a UBI image to a MTD device
+	 * and the FILE_LIST_FLAG_UBI is not given as this means we loose all
+	 * erase counters.
+	 */
+	if (!IS_ERR(mtd) && filetype == filetype_ubi &&
+	    !(fentry->flags & FILE_LIST_FLAG_UBI)) {
+		    fastboot_tx_print(f_fb, "INFOwriting UBI image to MTD device, "
+					    "add the 'u' ");
+		    fastboot_tx_print(f_fb, "INFOflag to the partition description");
+		    return 0;
+	}
+
+	if (!(fentry->flags & FILE_LIST_FLAG_UBI))
+		return 0;
+
+	if (!IS_ENABLED(CONFIG_UBIFORMAT)) {
+		fastboot_tx_print(f_fb, "FAILformat not available");
+		return -ENOSYS;
+	}
+
+	if (IS_ERR(mtd)) {
+		fastboot_tx_print(f_fb, "FAILUBI flag given on non-MTD device");
+		return -EINVAL;
+	}
+
+	if (filetype == filetype_ubi) {
+		fastboot_tx_print(f_fb, "INFOThis is an UBI image...");
+		return 1;
+	} else {
+		fastboot_tx_print(f_fb, "FAILThis is no UBI image but %s",
+			file_type_to_string(filetype));
+		return -EINVAL;
+	}
+}
+
+static int fastboot_handle_sparse(struct f_fastboot *f_fb,
+				  struct file_list_entry *fentry)
+{
+	struct sparse_image_ctx *sparse;
+	void *buf = NULL;
+	int ret, fd;
+	unsigned int flags = O_RDWR;
+	int bufsiz = SZ_128K;
+	struct stat s;
+	struct mtd_info *mtd = NULL;
+
+	ret = stat(fentry->filename, &s);
+	if (ret) {
+		if (fentry->flags & FILE_LIST_FLAG_CREATE)
+			flags |= O_CREAT;
+		else
+			return ret;
+	}
+
+	fd = open(fentry->filename, flags);
+	if (fd < 0)
+		return -errno;
+
+	ret = fstat(fd, &s);
+	if (ret)
+		goto out_close_fd;
+
+	sparse = sparse_image_open(FASTBOOT_TMPFILE);
+	if (IS_ERR(sparse)) {
+		pr_err("Cannot open sparse image\n");
+		ret = PTR_ERR(sparse);
+		goto out_close_fd;
+	}
+
+	if (S_ISREG(s.st_mode)) {
+		ret = ftruncate(fd, sparse_image_size(sparse));
+		if (ret)
+			goto out;
+	}
+
+	buf = malloc(bufsiz);
+	if (!buf) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	if (fentry->flags & FILE_LIST_FLAG_UBI) {
+		mtd = get_mtd(f_fb, fentry->filename);
+		if (IS_ERR(mtd)) {
+			ret = PTR_ERR(mtd);
+			goto out;
+		}
+	}
+
+	while (1) {
+		int retlen;
+		loff_t pos;
+
+		ret = sparse_image_read(sparse, buf, &pos, bufsiz, &retlen);
+		if (ret)
+			goto out;
+		if (!retlen)
+			break;
+
+		if (pos == 0) {
+			ret = check_ubi(f_fb, fentry, file_detect_type(buf, retlen));
+			if (ret < 0)
+				goto out;
+		}
+
+		if (fentry->flags & FILE_LIST_FLAG_UBI) {
+			if (!IS_ENABLED(CONFIG_UBIFORMAT)) {
+				ret = -ENOSYS;
+				goto out;
+			}
+
+			if (pos == 0) {
+				ret = do_ubiformat(f_fb, mtd, NULL, NULL, 0);
+				if (ret)
+					goto out;
+			}
+
+			ret = ubiformat_write(mtd, buf, retlen, pos);
+			if (ret)
+				goto out;
+		} else {
+			pos = lseek(fd, pos, SEEK_SET);
+			if (pos == -1) {
+				ret = -errno;
+				goto out;
+			}
+
+			ret = write_full(fd, buf, retlen);
+			if (ret < 0)
+				goto out;
+		}
+	}
+
+	ret = 0;
+
+out:
+	free(buf);
+	sparse_image_close(sparse);
+out_close_fd:
+	close(fd);
+
+	return ret;
+}
+
+static void cb_flash(struct f_fastboot *f_fb, const char *cmd)
+{
 	struct file_list_entry *fentry;
 	int ret;
-	const char *filename = NULL;
-	enum filetype filetype = file_name_detect_type(FASTBOOT_TMPFILE);
+	const char *filename = NULL, *sourcefile;
+	enum filetype filetype;
+
+	if (fastboot_download_to_buf(f_fb)) {
+		sourcefile = NULL;
+		filetype = file_detect_type(f_fb->buf, f_fb->download_bytes);
+	} else {
+		sourcefile = FASTBOOT_TMPFILE;
+		filetype = file_name_detect_type(FASTBOOT_TMPFILE);
+	}
 
 	fastboot_tx_print(f_fb, "INFOCopying file to %s...", cmd);
 
@@ -701,41 +933,53 @@ static void cb_flash(struct usb_ep *ep, struct usb_request *req, const char *cmd
 
 	if (!fentry) {
 		fastboot_tx_print(f_fb, "FAILNo such partition: %s", cmd);
-		return;
+		ret = -ENOENT;
+		goto out;
+	}
+
+	if (f_fb->cmd_flash) {
+		ret = f_fb->cmd_flash(f_fb, fentry, sourcefile, f_fb->buf,
+				      f_fb->download_size);
+		if (ret != FASTBOOT_CMD_FALLTHROUGH)
+			goto out;
 	}
 
 	filename = fentry->filename;
 
-	if (filetype == filetype_ubi) {
-		int fd;
-		struct mtd_info_user meminfo;
-		struct ubiformat_args args = {
-			.yes = 1,
-			.image = FASTBOOT_TMPFILE,
-		};
-
-		fd = open(filename, O_RDONLY);
-		if (fd < 0)
-			goto copy;
-
-		ret = ioctl(fd, MEMGETINFO, &meminfo);
-		close(fd);
-		/* Not a MTD device, ubiformat is not a valid operation */
-		if (ret)
-			goto copy;
-
-		fastboot_tx_print(f_fb, "INFOThis is an UBI image...");
-
-		if (!IS_ENABLED(CONFIG_UBIFORMAT)) {
-			fastboot_tx_print(f_fb, "FAILubiformat is not available");
-			return;
+	if (filetype == filetype_android_sparse) {
+		if (!IS_ENABLED(USB_GADGET_FASTBOOT_SPARSE)) {
+			fastboot_tx_print(f_fb, "FAILsparse image not supported");
+			ret = -EOPNOTSUPP;
+			goto out;
 		}
 
-		ret = ubiformat(meminfo.mtd, &args);
+		if (fastboot_download_to_buf(f_fb)) {
+			fastboot_tx_print(f_fb, "FAILsparse image not supported");
+			goto out;
+		}
 
+		ret = fastboot_handle_sparse(f_fb, fentry);
+		if (ret)
+			fastboot_tx_print(f_fb, "FAILwriting sparse image: %s",
+					  strerror(-ret));
+
+		goto out;
+	}
+
+	ret = check_ubi(f_fb, fentry, filetype);
+	if (ret < 0)
+		goto out;
+
+	if (ret > 0) {
+		struct mtd_info *mtd;
+
+		mtd = get_mtd(f_fb, fentry->filename);
+
+		ret = do_ubiformat(f_fb, mtd, sourcefile, f_fb->buf,
+				   f_fb->download_size);
 		if (ret) {
 			fastboot_tx_print(f_fb, "FAILwrite partition: %s", strerror(-ret));
-			return;
+			goto out;
 		}
 
 		goto out;
@@ -744,7 +988,6 @@ static void cb_flash(struct usb_ep *ep, struct usb_request *req, const char *cmd
 	if (IS_ENABLED(CONFIG_BAREBOX_UPDATE) && filetype_is_barebox_image(filetype)) {
 		struct bbu_data data = {
 			.devicefile = filename,
-			.imagefile = FASTBOOT_TMPFILE,
 			.flags = BBU_FLAG_YES,
 		};
 
@@ -753,41 +996,50 @@ static void cb_flash(struct usb_ep *ep, struct usb_request *req, const char *cmd
 
 		fastboot_tx_print(f_fb, "INFOThis is a barebox image...");
 
-		data.image = read_file(data.imagefile, &data.len);
-		if (!data.image) {
-			fastboot_tx_print(f_fb, "FAILreading barebox");
-			return;
+		if (fastboot_download_to_buf(f_fb)) {
+			data.len = f_fb->download_size;
+		} else {
+			ret = read_file_2(data.imagefile, &data.len, &f_fb->buf,
+					f_fb->download_size);
+			if (ret) {
+				fastboot_tx_print(f_fb, "FAILreading barebox");
+				goto out;
+			}
 		}
+
+		data.image = f_fb->buf;
+		data.imagefile = sourcefile;
 
 		ret = barebox_update(&data);
 
-		free(data.image);
-
-		if (ret) {
+		if (ret)
 			fastboot_tx_print(f_fb, "FAILupdate barebox: %s", strerror(-ret));
-			return;
-		}
 
 		goto out;
 	}
 
 copy:
-	ret = copy_file(FASTBOOT_TMPFILE, filename, 1);
+	if (fastboot_download_to_buf(f_fb))
+		ret = write_file(filename, f_fb->buf, f_fb->download_size);
+	else
+		ret = copy_file(FASTBOOT_TMPFILE, filename, 1);
 
-	unlink(FASTBOOT_TMPFILE);
-
-	if (ret) {
+	if (ret)
 		fastboot_tx_print(f_fb, "FAILwrite partition: %s", strerror(-ret));
-		return;
-	}
 
 out:
-	fastboot_tx_print(f_fb, "OKAY");
+	if (!ret)
+		fastboot_tx_print(f_fb, "OKAY");
+
+	free(f_fb->buf);
+	f_fb->buf = NULL;
+
+	if (!fastboot_download_to_buf(f_fb))
+		unlink(FASTBOOT_TMPFILE);
 }
 
-static void cb_erase(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_erase(struct f_fastboot *f_fb, const char *cmd)
 {
-	struct f_fastboot *f_fb = req->context;
 	struct file_list_entry *fentry;
 	int ret;
 	const char *filename = NULL;
@@ -824,33 +1076,32 @@ static void cb_erase(struct usb_ep *ep, struct usb_request *req, const char *cmd
 
 struct cmd_dispatch_info {
 	char *cmd;
-	void (*cb)(struct usb_ep *ep, struct usb_request *req, const char *opt);
+	void (*cb)(struct f_fastboot *f_fb, const char *opt);
 };
 
-static void fb_run_command(struct usb_ep *ep, struct usb_request *req, const char *cmd,
+static void fb_run_command(struct f_fastboot *f_fb, const char *cmdbuf,
 		const struct cmd_dispatch_info *cmds, int num_commands)
 {
-	void (*func_cb)(struct usb_ep *ep, struct usb_request *req, const char *cmd) = NULL;
-	struct f_fastboot *f_fb = req->context;
+	const struct cmd_dispatch_info *cmd;
 	int i;
 
 	console_countdown_abort();
 
 	for (i = 0; i < num_commands; i++) {
-		if (!strcmp_l1(cmds[i].cmd, cmd)) {
-			func_cb = cmds[i].cb;
-			cmd += strlen(cmds[i].cmd);
-			func_cb(ep, req, cmd);
+		cmd = &cmds[i];
+
+		if (!strcmp_l1(cmd->cmd, cmdbuf)) {
+			cmd->cb(f_fb, cmdbuf + strlen(cmd->cmd));
+
 			return;
 		}
 	}
 
-	fastboot_tx_print(f_fb, "FAILunknown command %s", cmd);
+	fastboot_tx_print(f_fb, "FAILunknown command %s", cmdbuf);
 }
 
-static void cb_oem_getenv(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_oem_getenv(struct f_fastboot *f_fb, const char *cmd)
 {
-	struct f_fastboot *f_fb = req->context;
 	const char *value;
 
 	pr_debug("%s: \"%s\"\n", __func__, cmd);
@@ -861,9 +1112,8 @@ static void cb_oem_getenv(struct usb_ep *ep, struct usb_request *req, const char
 	fastboot_tx_print(f_fb, "OKAY");
 }
 
-static void cb_oem_setenv(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_oem_setenv(struct f_fastboot *f_fb, const char *cmd)
 {
-	struct f_fastboot *f_fb = req->context;
 	char *var = xstrdup(cmd);
 	char *value;
 	int ret;
@@ -890,9 +1140,8 @@ out:
 		fastboot_tx_print(f_fb, "FAIL%s", strerror(-ret));
 }
 
-static void cb_oem_exec(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_oem_exec(struct f_fastboot *f_fb, const char *cmd)
 {
-	struct f_fastboot *f_fb = req->context;
 	int ret;
 
 	if (!IS_ENABLED(CONFIG_COMMAND_SUPPORT)) {
@@ -922,11 +1171,11 @@ static const struct cmd_dispatch_info cmd_oem_dispatch_info[] = {
 	},
 };
 
-static void cb_oem(struct usb_ep *ep, struct usb_request *req, const char *cmd)
+static void cb_oem(struct f_fastboot *f_fb, const char *cmd)
 {
 	pr_debug("%s: \"%s\"\n", __func__, cmd);
 
-	fb_run_command(ep, req, cmd, cmd_oem_dispatch_info, ARRAY_SIZE(cmd_oem_dispatch_info));
+	fb_run_command(f_fb, cmd, cmd_oem_dispatch_info, ARRAY_SIZE(cmd_oem_dispatch_info));
 }
 
 static const struct cmd_dispatch_info cmd_dispatch_info[] = {
@@ -959,17 +1208,40 @@ static const struct cmd_dispatch_info cmd_dispatch_info[] = {
 static void rx_handler_command(struct usb_ep *ep, struct usb_request *req)
 {
 	char *cmdbuf = req->buf;
+	struct f_fastboot *f_fb = req->context;
+	int ret;
 
 	if (req->status != 0)
 		return;
 
 	*(cmdbuf + req->actual) = 0;
 
-	fb_run_command(ep, req, cmdbuf, cmd_dispatch_info,
-				ARRAY_SIZE(cmd_dispatch_info));
+	if (f_fb->cmd_exec) {
+		ret = f_fb->cmd_exec(f_fb, cmdbuf);
+		if (ret != FASTBOOT_CMD_FALLTHROUGH)
+			goto done;
+	}
 
+	fb_run_command(f_fb, cmdbuf, cmd_dispatch_info,
+				ARRAY_SIZE(cmd_dispatch_info));
+done:
 	*cmdbuf = '\0';
 	req->actual = 0;
 	memset(req->buf, 0, EP_BUFFER_SIZE);
 	usb_ep_queue(ep, req);
 }
+
+static int fastboot_globalvars_init(void)
+{
+	if (IS_ENABLED(USB_GADGET_FASTBOOT_SPARSE))
+		globalvar_add_simple_int("usbgadget.fastboot_max_download_size",
+				 &fastboot_max_download_size, "%u");
+
+	return 0;
+}
+
+device_initcall(fastboot_globalvars_init);
+
+BAREBOX_MAGICVAR_NAMED(global_usbgadget_fastboot_max_download_size,
+		       global.usbgadget.fastboot_max_download_size,
+		       "Fastboot maximum download size");

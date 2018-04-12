@@ -20,6 +20,7 @@ struct property {
 	char *name;
 	int length;
 	void *value;
+	const void *value_const;
 	struct list_head list;
 };
 
@@ -100,6 +101,7 @@ void of_print_nodes(struct device_node *node, int indent);
 int of_probe(void);
 int of_parse_dtb(struct fdt_header *fdt);
 struct device_node *of_unflatten_dtb(const void *fdt);
+struct device_node *of_unflatten_dtb_const(const void *infdt);
 
 struct cdev;
 
@@ -117,6 +119,9 @@ extern int of_set_property(struct device_node *node, const char *p,
 			const void *val, int len, int create);
 extern struct property *of_new_property(struct device_node *node,
 				const char *name, const void *data, int len);
+extern struct property *of_new_property_const(struct device_node *node,
+					      const char *name,
+					      const void *data, int len);
 extern void of_delete_property(struct property *pp);
 
 extern struct device_node *of_find_node_by_name(struct device_node *from,
@@ -148,6 +153,7 @@ extern struct device_node *of_copy_node(struct device_node *parent,
 				const struct device_node *other);
 extern void of_delete_node(struct device_node *node);
 
+extern const char *of_get_machine_compatible(void);
 extern int of_machine_is_compatible(const char *compat);
 extern int of_device_is_compatible(const struct device_node *device,
 		const char *compat);
@@ -163,7 +169,10 @@ extern int of_get_child_count(const struct device_node *parent);
 extern int of_get_available_child_count(const struct device_node *parent);
 extern struct device_node *of_get_child_by_name(const struct device_node *node,
 					const char *name);
-
+extern char *of_get_reproducible_name(struct device_node *node);
+extern struct device_node *of_find_node_by_reproducible_name(struct device_node
+							     *from,
+							     const char *name);
 extern int of_property_read_u32_index(const struct device_node *np,
 				       const char *propname,
 				       u32 index, u32 *out_value);

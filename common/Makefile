@@ -11,7 +11,7 @@ obj-y				+= bootsource.o
 obj-y				+= restart.o
 obj-y				+= poweroff.o
 obj-$(CONFIG_AUTO_COMPLETE)	+= complete.o
-obj-$(CONFIG_BANNER)		+= version.o
+obj-y				+= version.o
 obj-$(CONFIG_BAREBOX_UPDATE)	+= bbu.o
 obj-$(CONFIG_BINFMT)		+= binfmt.o
 obj-$(CONFIG_BLOCK)		+= block.o
@@ -46,7 +46,7 @@ obj-$(CONFIG_RESET_SOURCE)	+= reset_source.o
 obj-$(CONFIG_SHELL_HUSH)	+= hush.o
 obj-$(CONFIG_SHELL_SIMPLE)	+= parser.o
 obj-$(CONFIG_STATE)		+= state/
-obj-$(CONFIG_RATP)		+= ratp.o
+obj-$(CONFIG_RATP)		+= ratp/
 obj-$(CONFIG_BOOTCHOOSER)	+= bootchooser.o
 obj-$(CONFIG_UIMAGE)		+= image.o uimage.o
 obj-$(CONFIG_FITIMAGE)		+= image-fit.o
@@ -60,30 +60,31 @@ obj-$(CONFIG_FILE_LIST)		+= file-list.o
 obj-$(CONFIG_FIRMWARE)		+= firmware.o
 obj-$(CONFIG_UBIFORMAT)		+= ubiformat.o
 obj-$(CONFIG_BAREBOX_UPDATE_IMX_NAND_FCB) += imx-bbu-nand-fcb.o
-obj-$(CONFIG_CONSOLE_RATP)	+= ratp.o
 obj-$(CONFIG_BOOT)		+= boot.o
 
-quiet_cmd_pwd_h = PWDH    $@
 ifdef CONFIG_PASSWORD
-ifneq ($(CONFIG_PASSWORD_DEFAULT),"")
-PASSWD_FILE := $(shell cd $(srctree); find $(CONFIG_PASSWORD_DEFAULT) -type f)
-cmd_pwd_h = echo -n "static const char default_passwd[] = \"" > $@; \
-	cat $< | tr -d '\n' >> $@; \
-	echo "\";" >> $@
 
-include/generated/passwd.h: $(PASSWD_FILE)
-	$(call if_changed,pwd_h)
+ifeq ($(CONFIG_PASSWORD_DEFAULT),"")
+define filechk_passwd
+	echo "static const char default_passwd[] = \"\";"
+endef
 else
-cmd_pwd_h = echo "static const char default_passwd[] = \"\";" > $@
-
-include/generated/passwd.h: FORCE
-	$(call if_changed,pwd_h)
+define filechk_passwd
+(							\
+echo -n "static const char default_passwd[] = \"";	\
+cat $(shell find $(srctree) -name $(CONFIG_PASSWORD_DEFAULT) -type f) | tr -d '\n';\
+echo "\";"						\
+)
+endef
 endif
+
+include/generated/passwd.h: $(srctree)/$(src)/Makefile FORCE
+	$(call filechk,passwd)
 
 targets += include/generated/passwd.h
 
 $(obj)/password.o: include/generated/passwd.h
-endif
+endif # CONFIG_PASSWORD
 
 # dependencies on generated files need to be listed explicitly
 $(obj)/version.o: include/generated/compile.h

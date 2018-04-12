@@ -10,6 +10,12 @@ menuconfig WATCHDOG
 
 if WATCHDOG
 
+menuconfig WATCHDOG_POLLER
+	bool "Watchdog periodic feeder support"
+	select POLLER
+	help
+	  Provides support for periodic watchdog feeder.
+
 config WATCHDOG_AR9344
 	bool "QCA AR9344"
 	depends on SOC_QCA_AR9344 || SOC_QCA_AR9331
@@ -57,5 +63,11 @@ config WATCHDOG_ORION
 	depends on ARCH_ARMADA_XP
 	help
 	  Add support for watchdog on the Marvall Armada XP
+
+config WATCHDOG_BCM2835
+	bool "Watchdog for BCM283x SoCs"
+	depends on ARCH_BCM283X
+	help
+	  Add support for watchdog on the Broadcom BCM283X SoCs.
 
 endif

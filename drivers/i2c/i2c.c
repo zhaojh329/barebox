@@ -117,6 +117,7 @@ int i2c_master_send(struct i2c_client *client, const char *buf, int count)
 	int ret;
 
 	msg.addr = client->addr;
+	msg.flags = 0;
 	msg.len = count;
 	msg.buf = (char *)buf;
 
@@ -184,7 +185,7 @@ int i2c_read_reg(struct i2c_client *client, u32 addr, u8 *buf, u16 count)
 	msg->len = i;
 
 	status = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
-	dev_dbg(&client->dev, "%s: %u@%u --> %d\n", __func__,
+	dev_dbg(&client->adapter->dev, "%s: %u@%u --> %d\n", __func__,
 		count, addr, status);
 
 	if (status == ARRAY_SIZE(msg))
@@ -217,7 +218,7 @@ int i2c_write_reg(struct i2c_client *client, u32 addr, const u8 *buf, u16 count)
 	memcpy(msg->buf + i, buf, count);
 
 	status = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
-	dev_dbg(&client->dev, "%s: %u@%u --> %d\n", __func__,
+	dev_dbg(&client->adapter->dev, "%s: %u@%u --> %d\n", __func__,
 		count, addr, status);
 
 	if (status == ARRAY_SIZE(msg))

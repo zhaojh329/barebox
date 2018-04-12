@@ -35,8 +35,7 @@
 #include <libgen.h>
 #include <block.h>
 #include <libfile.h>
-
-#include "parseopt.h"
+#include <parseopt.h>
 
 char *mkmodestr(unsigned long mode, char *str)
 {
@@ -100,13 +99,13 @@ char *normalise_path(const char *pathname)
 
 	slashes[0] = in = out = path;
 
-        while (*in) {
-                if(*in == '/') {
+	while (*in) {
+		if(*in == '/') {
 			slashes[sl++] = out;
-                        *out++ = *in++;
-                        while(*in == '/')
-                                in++;
-                } else {
+			*out++ = *in++;
+			while(*in == '/')
+				in++;
+		} else {
 			if (*in == '.' && (*(in + 1) == '/' || !*(in + 1))) {
 				sl--;
 				if (sl < 0)
@@ -124,16 +123,16 @@ char *normalise_path(const char *pathname)
 				continue;
 			}
                         *out++ = *in++;
-                }
-        }
+		}
+	}
 
 	*out-- = 0;
 
-        /*
-         * Remove trailing slash
-         */
-        if (*out == '/')
-                *out = 0;
+	/*
+	 * Remove trailing slash
+	 */
+	if (*out == '/')
+		*out = 0;
 
 	if (!*path) {
 		*path = '/';
@@ -192,7 +191,7 @@ static char *__canonicalize_path(const char *_pathname, int level)
 		 * with an additional stat() call.
 		 */
 		fsdev = get_fsdevice_by_path(outpath);
-		if (!fsdev->driver->readlink)
+		if (!fsdev || !fsdev->driver->readlink)
 			continue;
 
 		ret = __lstat(outpath, &s);
@@ -742,6 +741,28 @@ int creat(const char *pathname, mode_t mode)
 }
 EXPORT_SYMBOL(creat);
 
+int ftruncate(int fd, loff_t length)
+{
+	struct fs_driver_d *fsdrv;
+	FILE *f;
+	int ret;
+
+	if (check_fd(fd))
+		return -errno;
+
+	f = &files[fd];
+
+	fsdrv = f->fsdev->driver;
+
+	ret = fsdrv->truncate(&f->fsdev->dev, f, length);
+	if (ret)
+		return ret;
+
+	f->size = length;
+
+	return 0;
+}
+
 int ioctl(int fd, int request, void *buf)
 {
 	struct fs_driver_d *fsdrv;
@@ -1258,11 +1279,13 @@ static const char *detect_fs(const char *filename, const char *fsoptions)
 	enum filetype type;
 	struct driver_d *drv;
 	struct fs_driver_d *fdrv;
-	bool loop;
+	bool loop = false;
+	unsigned long long offset = 0;
 
 	parseopt_b(fsoptions, "loop", &loop);
+	parseopt_llu_suffix(fsoptions, "offset", &offset);
 	if (loop)
-		type = file_name_detect_type(filename);
+		type = file_name_detect_type_offset(filename, offset);
 	else
 		type = cdev_detect_type(filename);
 
@@ -1281,9 +1304,13 @@ static const char *detect_fs(const char *filename, const char *fsoptions)
 
 int fsdev_open_cdev(struct fs_device_d *fsdev)
 {
+	unsigned long long offset = 0;
+
 	parseopt_b(fsdev->options, "loop", &fsdev->loop);
+	parseopt_llu_suffix(fsdev->options, "offset", &offset);
 	if (fsdev->loop)
-		fsdev->cdev = cdev_create_loop(fsdev->backingstore, O_RDWR);
+		fsdev->cdev = cdev_create_loop(fsdev->backingstore, O_RDWR,
+					       offset);
 	else
 		fsdev->cdev = cdev_open(fsdev->backingstore, O_RDWR);
 	if (!fsdev->cdev)
@@ -1370,6 +1397,8 @@ int mount(const char *device, const char *fsname, const char *_path,
 
 		fsdev_set_linux_rootarg(fsdev, str);
 	}
+
+	free(path);
 
 	return 0;
 
@@ -1631,7 +1660,7 @@ int mkdir (const char *pathname, mode_t mode)
 {
 	struct fs_driver_d *fsdrv;
 	struct fs_device_d *fsdev;
-	char *p = normalise_path(pathname);
+	char *p = canonicalize_path(pathname);
 	char *freep = p;
 	int ret;
 	struct stat s;
@@ -1671,7 +1700,7 @@ int rmdir (const char *pathname)
 {
 	struct fs_driver_d *fsdrv;
 	struct fs_device_d *fsdev;
-	char *p = normalise_path(pathname);
+	char *p = canonicalize_path(pathname);
 	char *freep = p;
 	int ret;
 	struct stat s;
@@ -1709,72 +1738,6 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL(rmdir);
-
-static void memcpy_sz(void *dst, const void *src, size_t count, int rwsize)
-{
-	/* no rwsize specification given. Do whatever memcpy likes best */
-	if (!rwsize) {
-		memcpy(dst, src, count);
-		return;
-	}
-
-	rwsize = rwsize >> O_RWSIZE_SHIFT;
-
-	count /= rwsize;
-
-	while (count-- > 0) {
-		switch (rwsize) {
-		case 1:
-			*((u8 *)dst) = *((u8 *)src);
-			break;
-		case 2:
-			*((u16 *)dst) = *((u16 *)src);
-			break;
-		case 4:
-			*((u32  *)dst) = *((u32  *)src);
-			break;
-		case 8:
-			*((u64  *)dst) = *((u64  *)src);
-			break;
-		}
-		dst += rwsize;
-		src += rwsize;
-	}
-}
-
-ssize_t mem_read(struct cdev *cdev, void *buf, size_t count, loff_t offset, ulong flags)
-{
-	ulong size;
-	struct device_d *dev;
-
-	if (!cdev->dev || cdev->dev->num_resources < 1)
-		return -1;
-	dev = cdev->dev;
-
-	size = min((resource_size_t)count,
-			resource_size(&dev->resource[0]) -
-			(resource_size_t)offset);
-	memcpy_sz(buf, dev_get_mem_region(dev, 0) + offset, size, flags & O_RWSIZE_MASK);
-	return size;
-}
-EXPORT_SYMBOL(mem_read);
-
-ssize_t mem_write(struct cdev *cdev, const void *buf, size_t count, loff_t offset, ulong flags)
-{
-	ulong size;
-	struct device_d *dev;
-
-	if (!cdev->dev || cdev->dev->num_resources < 1)
-		return -1;
-	dev = cdev->dev;
-
-	size = min((resource_size_t)count,
-			resource_size(&dev->resource[0]) -
-			(resource_size_t)offset);
-	memcpy_sz(dev_get_mem_region(dev, 0) + offset, buf, size, flags & O_RWSIZE_MASK);
-	return size;
-}
-EXPORT_SYMBOL(mem_write);
 
 /*
  * cdev_get_mount_path - return the path a cdev is mounted on
@@ -1884,4 +1847,26 @@ char *path_get_linux_rootarg(const char *path)
 		return ERR_PTR(-ENOSYS);
 
 	return xstrdup(str);
+}
+
+/**
+ * __is_tftp_fs() - return true when path is mounted on TFTP
+ * @path: The path
+ *
+ * Do not use directly, use is_tftp_fs instead.
+ *
+ * Return: true when @path is on TFTP, false otherwise
+ */
+bool __is_tftp_fs(const char *path)
+{
+	struct fs_device_d *fsdev;
+
+	fsdev = get_fsdevice_by_path(path);
+	if (!fsdev)
+		return false;
+
+	if (strcmp(fsdev->driver->drv.name, "tftp"))
+		return false;
+
+	return true;
 }

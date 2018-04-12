@@ -344,7 +344,7 @@ config KALLSYMS
 	  This is useful to print a nice backtrace when an exception occurs.
 
 config RELOCATABLE
-	depends on PPC || (ARM && !CPU_V8)
+	depends on PPC || ARM
 	bool "generate relocatable barebox binary"
 	help
 	  A non relocatable barebox binary will run at it's compiled in
@@ -632,6 +632,13 @@ config BOOTM_FITIMAGE_SIGNATURE
 	  Additionally the barebox device tree needs a /signature node with the
 	  public key with which the image has been signed.
 
+config BOOTM_FITIMAGE_PUBKEY
+	string "Path to dtsi containing pubkey"
+	default "../fit/pubkey.dtsi"
+	depends on BOOTM_FITIMAGE_SIGNATURE
+	help
+	  Set Path to a dts snippet which holds the public keys for FIT images.
+
 config BOOTM_FORCE_SIGNED_IMAGES
 	bool
 	prompt "Force booting of signed images"
@@ -744,6 +751,14 @@ config CONSOLE_ACTIVATE_NONE
 
 endchoice
 
+config CONSOLE_ALLOW_COLOR
+	prompt "Allow colored console output during boot"
+	bool
+	help
+	  If enabled, colored output is allowed during boot. This is the
+	  compile time default for colored console output. After boot it
+	  can be controlled using global.allow_color.
+
 config PBL_CONSOLE
 	depends on PBL_IMAGE
 	depends on !CONSOLE_NONE
@@ -755,18 +770,7 @@ config PBL_CONSOLE
 	  must be running at the address it's linked at and bss must
 	  be cleared. On ARM that would be after setup_c().
 
-config CONSOLE_RATP
-	bool
-	select RATP
-	select CRC16
-	select POLLER
-	depends on CONSOLE_FULL
-	prompt "RATP console support"
-	help
-	  This option adds support for remote controlling barebox via serial
-	  port. The regular console is designed for human interaction whereas
-	  this option adds a machine readable interface for controlling barebox.
-	  Say yes here if you want to control barebox from a remote host.
+source common/ratp/Kconfig
 
 config PARTITION
 	bool
@@ -947,7 +951,6 @@ config STATE_BACKWARD_COMPATIBLE
 
 config BOOTCHOOSER
 	bool "bootchooser infrastructure"
-	depends on !SHELL_NONE
 	select BOOT
 	select BOOTM
 	select ENVIRONMENT_VARIABLES
