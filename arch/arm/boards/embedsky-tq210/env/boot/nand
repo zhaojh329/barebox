@@ -1,0 +1,3 @@
+#!/bin/sh
+
+global.bootm.image="/dev/nand0.kernel"
