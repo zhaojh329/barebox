@@ -1,1 +1,1 @@
-256K(barebox),4M(kernel),-(root)
+256K(barebox),128K(bareboxenv),4M(kernel),-(rootfs)
