@@ -23,44 +23,58 @@
 #include <fs.h>
 #include <fcntl.h>
 
-static int nand_update(struct bbu_handler *handler, struct bbu_data *data)
+static int nand_update(struct bbu_data *data)
 {
-	int fd, ret;
+    int fd, ret;
 
-	if (file_detect_type(data->image + 16, data->len - 16) != filetype_arm_barebox &&
-			!bbu_force(data, "Not an ARM barebox image"))
-		return -EINVAL;
+    ret = bbu_confirm(data);
+    if (ret)
+        return ret;
 
-	ret = bbu_confirm(data);
-	if (ret)
-		return ret;
+    fd = open(data->devicefile, O_WRONLY);
+    if (fd < 0)
+        return fd;
 
-	fd = open(data->devicefile, O_WRONLY);
-	if (fd < 0)
-		return fd;
+    debug("%s: eraseing %s from 0 to 0x%08x\n", __func__,
+            data->devicefile, data->len);
+    ret = erase(fd, data->len, 0);
+    if (ret) {
+        printf("erasing %s failed with %s\n", data->devicefile,
+                strerror(-ret));
+        goto err_close;
+    }
 
-	debug("%s: eraseing %s from 0 to 0x%08x\n", __func__,
-			data->devicefile, data->len);
-	ret = erase(fd, data->len, 0);
-	if (ret) {
-		printf("erasing %s failed with %s\n", data->devicefile,
-				strerror(-ret));
-		goto err_close;
-	}
+    ret = write(fd, data->image, data->len);
+    if (ret < 0) {
+        printf("writing update to %s failed with %s\n", data->devicefile,
+                strerror(-ret));
+        goto err_close;
+    }
 
-	ret = write(fd, data->image, data->len);
-	if (ret < 0) {
-		printf("writing update to %s failed with %s\n", data->devicefile,
-				strerror(-ret));
-		goto err_close;
-	}
-
-	ret = 0;
+    ret = 0;
 
 err_close:
-	close(fd);
+    close(fd);
 
-	return ret;
+    return ret;
+}
+
+static int nand_update_barebox(struct bbu_handler *handler, struct bbu_data *data)
+{
+    if (file_detect_type(data->image + 16, data->len - 16) != filetype_arm_barebox &&
+            !bbu_force(data, "Not an ARM barebox image"))
+        return -EINVAL;
+
+    return nand_update(data);
+}
+
+static int nand_update_kernel(struct bbu_handler *handler, struct bbu_data *data)
+{
+    if (file_detect_type(data->image, data->len) != filetype_uimage &&
+            !bbu_force(data, "Not an U-Boot uImage"))
+        return -EINVAL;
+
+    return nand_update(data);
 }
 
 /*
@@ -68,18 +82,27 @@ err_close:
  */
 int s5pcxx_bbu_nand_register_handler(void)
 {
-	struct bbu_handler *handler;
-	int ret;
+    struct bbu_handler *handler;
+    int ret;
 
-	handler = xzalloc(sizeof(*handler));
-	handler->devicefile = "/dev/nand0.barebox";
-	handler->name = "nand";
-	handler->handler = nand_update;
-	handler->flags = BBU_HANDLER_FLAG_DEFAULT;
+    handler = xzalloc(sizeof(*handler));
+    handler->devicefile = "/dev/self0";
+    handler->name = "barebox";
+    handler->handler = nand_update_barebox;
+    handler->flags = BBU_HANDLER_FLAG_DEFAULT;
 
-	ret = bbu_register_handler(handler);
-	if (ret)
-		free(handler);
+    ret = bbu_register_handler(handler);
+    if (ret)
+        free(handler);
 
-	return ret;
+    handler = xzalloc(sizeof(*handler));
+    handler->devicefile = "/dev/nand0.kernel";
+    handler->name = "kernel";
+    handler->handler = nand_update_kernel;
+
+    ret = bbu_register_handler(handler);
+    if (ret)
+        free(handler);
+
+    return ret;
 }
