@@ -16,6 +16,7 @@ void barebox_banner (void)
 	printf("\n\n");
 	pr_info("%s", version_string);
 	printf("\n\n");
+	pr_info("SOC: %s\n", barebox_get_soc());
 	pr_info("Board: %s\n", barebox_get_model());
 }
 #endif
