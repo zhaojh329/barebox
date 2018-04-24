@@ -70,13 +70,11 @@ static inline void PUTC_LL(int ch)
 #define AR933X_UART_CS_TX_READY_ORIDE	BIT(7)
 #define AR933X_UART_CS_RX_READY_ORIDE	BIT(8)
 
-/*
- * simple uart clock setup
- * from u-boot_mod/u-boot/cpu/mips/ar7240/hornet_serial.c
- */
-#define BAUD_CLOCK 25000000
-#define CLOCK_SCALE ((BAUD_CLOCK / (16 * CONFIG_BAUDRATE)) - 1)
-#define CLOCK_STEP 0x2000
+/* calculated by the function ar933x_uart_get_scale_step from drivers/serial/serial_ar933x.c */
+#define CLOCK_25MHZ_SCALE	43
+#define CLOCK_25MHZ_STEP	26575
+#define CLOCK_40MHZ_SCALE	36
+#define CLOCK_40MHZ_STEP	13967
 
 #define AR933X_UART_CLOCK_REG		0x08
 #define CLOCK_REG	((KSEG1 | AR933X_UART_BASE) | AR933X_UART_CLOCK_REG)
@@ -87,8 +85,19 @@ static inline void PUTC_LL(int ch)
 	pbl_reg_writel ((AR933X_UART_CS_IF_MODE_DCE << AR933X_UART_CS_IF_MODE_S) \
 			| AR933X_UART_CS_TX_READY_ORIDE \
 			| AR933X_UART_CS_RX_READY_ORIDE), UART_CS_REG
-	pbl_reg_writel ((CLOCK_SCALE << 16) | CLOCK_STEP), CLOCK_REG
 
+	li		t0, RESET_REG_BOOTSTRAP
+	lw		t1, 0(t0)
+	andi	t1, t1, AR933X_BOOTSTRAP_REF_CLK_40
+	beqz	t1, 1f
+	nop
+
+	pbl_reg_writel ((CLOCK_40MHZ_SCALE << 16) | CLOCK_40MHZ_STEP), CLOCK_REG
+	b 2f
+	nop
+1:
+	pbl_reg_writel ((CLOCK_25MHZ_SCALE << 16) | CLOCK_25MHZ_STEP), CLOCK_REG
+2:
 #endif /* CONFIG_DEBUG_LL */
 .endm
 
