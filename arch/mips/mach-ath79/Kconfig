@@ -50,6 +50,13 @@ config BOARD_BLACK_SWIFT
 	select HAVE_IMAGE_COMPRESSION
 	select HAS_NMON
 
+config BOARD_AR9331_GENERAL
+	bool "AR9331 General Board"
+	select SOC_QCA_AR9331
+	select HAVE_PBL_IMAGE
+	select HAVE_IMAGE_COMPRESSION
+	select HAS_NMON
+
 endchoice
 
 endif
