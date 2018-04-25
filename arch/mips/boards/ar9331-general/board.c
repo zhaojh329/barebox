@@ -15,8 +15,10 @@
  *
  */
 
-#include <common.h>
 #include <init.h>
+#include <common.h>
+#include <asm/memory.h>
+#include <linux/sizes.h>
 
 static int model_hostname_init(void)
 {
@@ -25,3 +27,19 @@ static int model_hostname_init(void)
 	return 0;
 }
 postcore_initcall(model_hostname_init);
+
+static int add_memory_bank(void)
+{
+    u32 size;
+
+    if (IS_ENABLED(CONFIG_MMU)) {
+        size = get_ram_size((void *)KSEG0, SZ_256M);
+        barebox_add_memory_bank("kseg0_ram0", KSEG0, size);
+    } else {
+        size = get_ram_size((void *)KSEG1, SZ_256M);
+        barebox_add_memory_bank("kseg1_ram0", KSEG1, size);
+    }
+    return 0;
+}
+
+core_initcall(add_memory_bank);
