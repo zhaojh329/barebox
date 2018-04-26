@@ -245,6 +245,7 @@ copy_loop_exit:
 10:	cache		\op, 0(\curr)
 	PTR_ADDU	\curr, \curr, \line_sz
 	bne		\curr, \end, 10b
+    nop
 	.endm
 
 	.macro	l1_info		sz, line_sz, off
