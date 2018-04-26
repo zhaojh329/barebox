@@ -8,8 +8,8 @@
 #include "ar9331.dtsi"
 
 / {
-    model = "AR9331 General";
-    compatible = "ar9331-general";
+    model = "General AR9331";
+    compatible = "general,ar9331";
 
     chosen {
         environment@0 {

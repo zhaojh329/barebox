@@ -22,7 +22,7 @@
 
 static int model_hostname_init(void)
 {
-	barebox_set_hostname("ar9331-general");
+	barebox_set_hostname("general-ar9331");
 
 	return 0;
 }

@@ -6,8 +6,8 @@
 #include "ar9344.dtsi"
 
 / {
-	model = "AR9344 General";
-	compatible = "ar9344,general";
+	model = "General AR9344";
+	compatible = "general,ar9344";
 
 	aliases {
 		serial0 = &uart0;
