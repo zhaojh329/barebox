@@ -31,6 +31,19 @@ static int do_bootm_barebox(struct image_data *data)
 	restart_machine();
 }
 
+static int do_bootm_linux(struct image_data *data)
+{
+	int ret;
+	void (*kernel)(void) = (void *)data->os_address;
+
+	ret = bootm_load_os(data, data->os_address);
+	if (ret)
+		return ret;
+
+	kernel();
+	return 0;
+}
+
 static struct image_handler barebox_handler = {
 	.name = "MIPS barebox",
 	.bootm = do_bootm_barebox,
@@ -42,10 +55,25 @@ static struct binfmt_hook binfmt_barebox_hook = {
 	.exec = "bootm",
 };
 
+static struct image_handler uimage_handler = {
+	.name = "MIPS Linux uImage",
+	.bootm = do_bootm_linux,
+	.filetype = filetype_uimage,
+	.ih_os = IH_OS_LINUX,
+};
+
+static struct binfmt_hook binfmt_uimage_hook = {
+	.type = filetype_uimage,
+	.exec = "bootm",
+};
+
 static int mips_register_image_handler(void)
 {
 	register_image_handler(&barebox_handler);
 	binfmt_register(&binfmt_barebox_hook);
+
+	register_image_handler(&uimage_handler);
+	binfmt_register(&binfmt_uimage_hook);
 
 	return 0;
 }
