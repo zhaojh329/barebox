@@ -85,6 +85,7 @@ board-$(CONFIG_BOARD_TPLINK_MR3020)	:= tplink-mr3020
 board-$(CONFIG_BOARD_TPLINK_WDR4300)	:= tplink-wdr4300
 board-$(CONFIG_BOARD_BLACK_SWIFT)	:= black-swift
 board-$(CONFIG_BOARD_AR9331_GENERAL) := ar9331-general
+board-$(CONFIG_BOARD_AR9344_GENERAL) := ar9344-general
 
 machine-$(CONFIG_MACH_MIPS_BCM47XX)	:= bcm47xx
 board-$(CONFIG_BOARD_DLINK_DIR320)	:= dlink-dir-320

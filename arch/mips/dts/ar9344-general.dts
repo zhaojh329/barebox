@@ -1,0 +1,76 @@
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+#include "ar9344.dtsi"
+
+/ {
+	model = "AR9344 General";
+	compatible = "ar9344,general";
+
+	aliases {
+		serial0 = &uart0;
+		spiflash = &spiflash;
+	};
+
+	chosen {
+		stdout-path = &uart0;
+
+		environment@0 {
+			compatible = "barebox,environment";
+			device-path = &spiflash, "partname:barebox-environment";
+		};
+	};
+};
+
+&ref {
+	clock-frequency = <40000000>;
+};
+
+&uart0 {
+	status = "okay";
+	clock-frequency = <40000000>;
+};
+
+&wdt0 {
+	status = "okay";
+};
+
+&spi {
+	num-chipselects = <1>;
+	status = "okay";
+
+	/* Winbond W25Q64CV SPI flash */
+	spiflash: w25q64cv@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor", "winbond,w25q64cv";
+		spi-max-frequency = <104000000>;
+		reg = <0>;
+
+        partition@0 {
+            label = "barebox";
+            reg = <0 0x20000>;  /* 128K */
+        };
+
+        partition@20000 {
+            label = "barebox-environment";
+            reg = <0x20000 0x10000>;    /* 64K */
+        };
+
+        partition@30000 {
+            label = "firmware";
+            reg = <0x30000 0x500000>;   /* 5M */
+        };
+
+        partition@530000 {
+            label = "art";
+            reg = <0x530000 0x10000>;   /* 64K */
+        };
+	};
+};
+
+&mac0 {
+	status = "okay";
+};

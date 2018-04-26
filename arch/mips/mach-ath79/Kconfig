@@ -57,6 +57,13 @@ config BOARD_AR9331_GENERAL
 	select HAVE_IMAGE_COMPRESSION
 	select HAS_NMON
 
+config BOARD_AR9344_GENERAL
+	bool "AR9344 General Board"
+	select SOC_QCA_AR9344
+	select HAVE_PBL_IMAGE
+	select HAVE_IMAGE_COMPRESSION
+	select HAS_NMON
+
 endchoice
 
 endif
