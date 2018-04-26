@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) Jianhui Zhao <jianhuizhao329@gmail.com>
  * Copyright (C) 2017 Oleksij Rempel <linux@rempel-privat.de>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -21,8 +22,6 @@
 #include <mach/ath79.h>
 #include <dt-bindings/clock/ath79-clk.h>
 
-#define AR9344_CPU_PLL_CONFIG			0x00
-#define AR9344_DDR_PLL_CONFIG			0x04
 #define AR9344_OUTDIV_M				0x3
 #define AR9344_OUTDIV_S				19
 #define AR9344_REFDIV_M				0x1f
@@ -32,50 +31,102 @@
 #define AR9344_NFRAC_M				0x3f
 #define AR9344_NFRAC_S				0
 
-
-#define AR9344_CPU_DDR_CLOCK_CONTROL		0x08
-#define AR9344_CPU_FROM_CPUPLL			BIT(20)
-#define AR9344_CPU_PLL_BYPASS			BIT(2)
-#define AR9344_CPU_POST_DIV_M			0x1f
-#define AR9344_CPU_POST_DIV_S			5
-
 static struct clk *clks[ATH79_CLK_END];
 static struct clk_onecell_data clk_data;
 
 struct clk_ar9344 {
 	struct clk clk;
 	void __iomem *base;
-	u32 div_shift;
-	u32 div_mask;
 	const char *parent;
 };
+
+static unsigned long ar934x_cpupll_to_hz(const u32 regval, unsigned long xtal)
+{
+	const u32 outdiv = (regval >> AR934X_PLL_CPU_CONFIG_OUTDIV_SHIFT) &
+			   AR934X_PLL_CPU_CONFIG_OUTDIV_MASK;
+	const u32 refdiv = (regval >> AR934X_PLL_CPU_CONFIG_REFDIV_SHIFT) &
+			   AR934X_PLL_CPU_CONFIG_REFDIV_MASK;
+	const u32 nint = (regval >> AR934X_PLL_CPU_CONFIG_NINT_SHIFT) &
+			   AR934X_PLL_CPU_CONFIG_NINT_MASK;
+	const u32 nfrac = (regval >> AR934X_PLL_CPU_CONFIG_NFRAC_SHIFT) &
+			   AR934X_PLL_CPU_CONFIG_NFRAC_MASK;
+
+	return (xtal * (nint + (nfrac >> 9))) / (refdiv * (1 << outdiv));
+}
+
+static unsigned long ar934x_ddrpll_to_hz(const u32 regval, unsigned long xtal)
+{
+	const u32 outdiv = (regval >> AR934X_PLL_DDR_CONFIG_OUTDIV_SHIFT) &
+			   AR934X_PLL_DDR_CONFIG_OUTDIV_MASK;
+	const u32 refdiv = (regval >> AR934X_PLL_DDR_CONFIG_REFDIV_SHIFT) &
+			   AR934X_PLL_DDR_CONFIG_REFDIV_MASK;
+	const u32 nint = (regval >> AR934X_PLL_DDR_CONFIG_NINT_SHIFT) &
+			   AR934X_PLL_DDR_CONFIG_NINT_MASK;
+	const u32 nfrac = (regval >> AR934X_PLL_DDR_CONFIG_NFRAC_SHIFT) &
+			   AR934X_PLL_DDR_CONFIG_NFRAC_MASK;
+
+	return (xtal * (nint + (nfrac >> 9))) / (refdiv * (1 << outdiv));
+}
 
 static unsigned long clk_ar9344_recalc_rate(struct clk *clk,
 	unsigned long parent_rate)
 {
 	struct clk_ar9344 *f = container_of(clk, struct clk_ar9344, clk);
-	int outdiv, refdiv, nint, nfrac;
-	int cpu_post_div;
-	u32 clock_ctrl;
-	u32 val;
+	u32 ctrl, cpu, cpupll, ddr, ddrpll;
+	u32 cpudiv, ddrdiv, busdiv;
+	u32 cpuclk, ddrclk, busclk;
 
-	clock_ctrl = __raw_readl(f->base + AR9344_CPU_DDR_CLOCK_CONTROL);
-	cpu_post_div = ((clock_ctrl >> AR9344_CPU_POST_DIV_S)
-			& AR9344_CPU_POST_DIV_M) + 1;
-	if (clock_ctrl & AR9344_CPU_PLL_BYPASS) {
-		return parent_rate;
-	} else if (clock_ctrl & AR9344_CPU_FROM_CPUPLL) {
-		val = __raw_readl(f->base + AR9344_CPU_PLL_CONFIG);
-	} else {
-		val = __raw_readl(f->base + AR9344_DDR_PLL_CONFIG);
+	cpu = __raw_readl(f->base + AR934X_PLL_CPU_CONFIG_REG);
+	ddr = __raw_readl(f->base + AR934X_PLL_DDR_CONFIG_REG);
+	ctrl = __raw_readl(f->base + AR934X_PLL_CPU_DDR_CLK_CTRL_REG);
+
+	cpupll = ar934x_cpupll_to_hz(cpu, parent_rate);
+	ddrpll = ar934x_ddrpll_to_hz(ddr, parent_rate);
+
+	if (!strcmp(clk->name, "cpu")) {
+		if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_PLL_BYPASS)
+			cpuclk = parent_rate;
+		else if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_CPUCLK_FROM_CPUPLL)
+			cpuclk = cpupll;
+		else
+			cpuclk = ddrpll;
+
+
+		cpudiv = (ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_POST_DIV_SHIFT) &
+			AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_POST_DIV_MASK;
+
+		return cpuclk / (cpudiv + 1);
 	}
 
-	outdiv = (val >> AR9344_OUTDIV_S) & AR9344_OUTDIV_M;
-	refdiv = (val >> AR9344_REFDIV_S) & AR9344_REFDIV_M;
-	nint = (val >> AR9344_NINT_S) & AR9344_NINT_M;
-	nfrac = (val >> AR9344_NFRAC_S) & AR9344_NFRAC_M;
+	if (!strcmp(clk->name, "ddr")) {
+		if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_PLL_BYPASS)
+			ddrclk = parent_rate;
+		else if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_DDRCLK_FROM_DDRPLL)
+			ddrclk = ddrpll;
+		else
+			ddrclk = cpupll;
 
-	return (parent_rate * (nint + (nfrac >> 9))) / (refdiv * (1 << outdiv));
+		ddrdiv = (ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_POST_DIV_SHIFT) &
+			AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_POST_DIV_MASK;
+
+		return ddrclk / (ddrdiv + 1);
+	}
+
+	if (!strcmp(clk->name, "ahb")) {
+		if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_PLL_BYPASS)
+			busclk = parent_rate;
+		else if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_AHBCLK_FROM_DDRPLL)
+			busclk = ddrpll;
+		else
+			busclk = cpupll;
+
+		busdiv = (ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_POST_DIV_SHIFT) &
+			AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_POST_DIV_MASK;
+
+		return busclk / (busdiv + 1);
+	}
+
+	return 0;
 }
 
 struct clk_ops clk_ar9344_ops = {
@@ -89,8 +140,6 @@ static struct clk *clk_ar9344(const char *name, const char *parent,
 
 	f->parent = parent;
 	f->base = base;
-	f->div_shift = 0;
-	f->div_mask = 0;
 
 	f->clk.ops = &clk_ar9344_ops;
 	f->clk.name = name;
@@ -105,6 +154,8 @@ static struct clk *clk_ar9344(const char *name, const char *parent,
 static void ar9344_pll_init(void __iomem *base)
 {
 	clks[ATH79_CLK_CPU] = clk_ar9344("cpu", "ref", base);
+	clks[ATH79_CLK_DDR] = clk_ar9344("ddr", "ref", base);
+	clks[ATH79_CLK_AHB] = clk_ar9344("ahb", "ref", base);
 }
 
 static int ar9344_clk_probe(struct device_d *dev)
