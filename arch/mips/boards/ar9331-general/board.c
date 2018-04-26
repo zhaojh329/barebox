@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Antony Pavlov <antonynpavlov@gmail.com>
+ * Copyright (C) Jianhui Zhao <jianhuizhao329@gmail.com>
  *
  * This file is part of barebox.
  * See file CREDITS for list of people who contributed to this project.
