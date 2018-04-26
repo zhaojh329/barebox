@@ -51,6 +51,12 @@ skip_flash_test:
 	pbl_ar9344_v11_ddr2_config
 
 skip_pll_ram_config:
+    /* Initialize caches... */
+    mips_cache_reset
+
+    /* ... and enable them */
+    dcache_enable
+
 	debug_ll_outc '6'
 	debug_ll_outnl
 
