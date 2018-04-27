@@ -36,6 +36,10 @@ config XZ_DECOMPRESS
 	select XZ_DEC_ARMTHUMB
 	select XZ_DEC_SPARC
 
+config LZMA_DECOMPRESS
+	bool "include lzma uncompression support"
+	select UNCOMPRESS
+
 config XZ_DEC_X86
         bool
 
