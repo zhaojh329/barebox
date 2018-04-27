@@ -40,6 +40,8 @@ static int do_bootm_linux(struct image_data *data)
 	if (ret)
 		return ret;
 
+	shutdown_barebox();
+
 	kernel();
 	return 0;
 }
