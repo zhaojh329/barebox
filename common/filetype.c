@@ -68,6 +68,7 @@ static const struct filetype_str filetype_str[] = {
 	[filetype_kwbimage_v1] = { "MVEBU kwbimage (v1)", "kwb" },
 	[filetype_android_sparse] = { "Android sparse image", "sparse" },
 	[filetype_arm64_linux_image] = { "ARM aarch64 Linux image", "aarch64-linux" },
+	[filetype_tplinkfw] = { "Tplink firmware", "tplinkfw" },
 };
 
 const char *file_type_to_string(enum filetype f)
@@ -306,6 +307,11 @@ enum filetype file_detect_type(const void *_buf, size_t bufsize)
 	    buf8[0x1c] == 0 && buf8[0x1d] == 0 &&
 	    (buf8[0x1e] == 0 || buf8[0x1e] == 1))
 		return filetype_kwbimage_v1;
+
+	if (buf[0] == be32_to_cpu(0x01000000) ||
+		buf[0] == be32_to_cpu(0x02000000) ||
+		buf[0] == be32_to_cpu(0x03000000))
+		return filetype_tplinkfw;
 
 	if (is_sparse_image(_buf))
 		return filetype_android_sparse;
