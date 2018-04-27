@@ -30,6 +30,7 @@
 #include <rtc.h>
 #include <filetype.h>
 #include <memory.h>
+#include <linux/decompress/unlzma.h>
 
 static inline int uimage_is_multi_image(struct uimage_handle *handle)
 {
@@ -327,6 +328,10 @@ int uimage_load(struct uimage_handle *handle, unsigned int image_no,
 	/* if ramdisk U-Boot expect to ignore the compression type */
 	if (hdr->ih_comp == IH_COMP_NONE || hdr->ih_type == IH_TYPE_RAMDISK)
 		uncompress_fn = uncompress_copy;
+#ifdef CONFIG_LZMA_DECOMPRESS
+	else if (hdr->ih_comp == IH_COMP_LZMA)
+		uncompress_fn = decompress_unlzma;
+#endif
 	else
 		uncompress_fn = uncompress;
 
