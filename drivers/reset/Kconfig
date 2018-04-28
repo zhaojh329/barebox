@@ -11,3 +11,14 @@ menuconfig RESET_CONTROLLER
 	  via GPIOs or SoC-internal reset controller modules.
 
 	  If unsure, say no.
+
+if RESET_CONTROLLER
+
+config RESET_ATH79
+	bool "AR71xx Reset Driver"
+	default MACH_MIPS_ATH79
+	help
+		This enables the ATH79 reset controller driver that supports the
+		AR71xx SoC reset controller.
+
+endif
