@@ -154,3 +154,24 @@ static int ar933x_clk_init(void)
 	return platform_driver_register(&ar933x_clk_driver);
 }
 postcore_initcall(ar933x_clk_init);
+
+/**
+ * of_fixed_clk_setup() - Setup function for simple fixed rate clock
+ */
+static int of_fixed_clk_setup(struct device_node *node)
+{
+	struct clk *clk;
+	u32 rate, rv;
+
+	rv = ath79_reset_rr(AR933X_RESET_REG_BOOTSTRAP);
+	if (rv & AR933X_BOOTSTRAP_REF_CLK_40)
+		rate = 40000000;
+	else
+		rate = 25000000;
+
+	clk = clk_fixed(node->name, rate);
+	if (IS_ERR(clk))
+		return IS_ERR(clk);
+	return of_clk_add_provider(node, of_clk_src_simple_get, clk);
+}
+CLK_OF_DECLARE(fixed_clock, "qca,ar9330-fixed-clock", of_fixed_clk_setup);

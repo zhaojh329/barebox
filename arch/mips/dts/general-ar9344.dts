@@ -24,10 +24,6 @@
 	};
 };
 
-&ref {
-	clock-frequency = <40000000>;
-};
-
 &uart0 {
 	status = "okay";
 	clock-frequency = <40000000>;

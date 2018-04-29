@@ -30,7 +30,7 @@
 	};
 
 	ref: ref {
-		compatible = "fixed-clock";
+		compatible = "qca,ar9330-fixed-clock";
 		#clock-cells = <0>;
 	};
 
