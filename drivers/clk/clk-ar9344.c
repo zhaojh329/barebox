@@ -158,6 +158,16 @@ static void ar9344_pll_init(void __iomem *base)
 	clks[ATH79_CLK_AHB] = clk_ar9344("ahb", "ref", base);
 }
 
+static u32 clk_get_rate_mhz(const char *name)
+{
+	struct clk *clk = clk_lookup(name);
+
+	if (clk)
+		return clk_get_rate(clk) / 1000000;
+
+	return 0;
+}
+
 static int ar9344_clk_probe(struct device_d *dev)
 {
 	struct resource *iores;
@@ -174,6 +184,10 @@ static int ar9344_clk_probe(struct device_d *dev)
 	clk_data.clk_num = ARRAY_SIZE(clks);
 	of_clk_add_provider(dev->device_node, of_clk_src_onecell_get,
 			    &clk_data);
+
+	pr_info("Clocks: CPU:%u MHz, DDR:%u MHz, AHB:%u MHz, Ref:%u MHz\n",
+		clk_get_rate_mhz("cpu"), clk_get_rate_mhz("ddr"),
+		clk_get_rate_mhz("ahb"), clk_get_rate_mhz("ref"));
 
 	return 0;
 }
