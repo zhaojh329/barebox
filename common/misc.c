@@ -187,24 +187,6 @@ EXPORT_SYMBOL(barebox_set_hostname_no_overwrite);
 BAREBOX_MAGICVAR_NAMED(global_hostname, global.hostname,
 		"shortname of the board. Also used as hostname for DHCP requests");
 
-/* SOC info */
-static char *soc;
-
-void barebox_set_soc(const char *__soc)
-{
-	globalvar_add_simple_string("soc", &soc);
-
-	free(soc);
-	soc = xstrdup(__soc);
-}
-EXPORT_SYMBOL(barebox_set_soc);
-
-const char *barebox_get_soc(void)
-{
-	return soc;
-}
-EXPORT_SYMBOL(barebox_get_soc);
-
 void __noreturn panic(const char *fmt, ...)
 {
 	va_list args;

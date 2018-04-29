@@ -59,7 +59,6 @@ static int mach_cpu_init(void)
 	u32 id, major, minor = 0;
 	u32 rev = 0, ver = 1;
 	const char *chip = "????";
-	char buf[128] = "";
 	int i;
 
 	id = ath79_reset_rr(AR71XX_RESET_REG_REV_ID);
@@ -106,22 +105,20 @@ static int mach_cpu_init(void)
 	case ATH79_SOC_QCA9556:
 	case ATH79_SOC_QCA9558:
 	case ATH79_SOC_QCA9561:
-		sprintf(buf, "Qualcomm Atheros QCA%s ver %u rev %u", chip,
+		pr_info("SOC: Qualcomm Atheros QCA%s ver %u rev %u\n", chip,
 		       ver, rev);
 		break;
 	case ATH79_SOC_TP9343:
-		sprintf(buf, "Qualcomm Atheros TP%s rev %u", chip, rev);
+		pr_info("SOC: Qualcomm Atheros TP%s rev %u\n", chip, rev);
 		break;
 	case ATH79_SOC_UNKNOWN:
-		sprintf(buf, "ATH79: unknown SoC, id:0x%08x", id);
+		pr_info("SOC: ATH79: unknown SoC, id:0x%08x\n", id);
 		break;
 	default:
-		sprintf(buf, "Atheros AR%s rev %u", chip, rev);
+		pr_info("SOC: Atheros AR%s rev %u\n", chip, rev);
 	}
-
-	barebox_set_soc(buf);
 
 	return 0;
 }
 
-postcore_initcall(mach_cpu_init);
+core_initcall(mach_cpu_init);
