@@ -220,7 +220,7 @@ static void ath79_spi_enable(struct ath79_spi *sp)
 	sp->val = ath79_spi_rr(sp, AR71XX_SPI_REG_IOC);
 
 	/* TODO: setup speed? */
-	ath79_spi_wr(sp, 0x43, AR71XX_SPI_REG_CTRL);
+	ath79_spi_wr(sp, 0x41, AR71XX_SPI_REG_CTRL);
 }
 
 static void ath79_spi_disable(struct ath79_spi *sp)
