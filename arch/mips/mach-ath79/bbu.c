@@ -16,14 +16,22 @@
 #include <init.h>
 #include <fs.h>
 #include <fcntl.h>
-#include <libfile.h>
+#include <ioctl.h>
+#include <progress.h>
+#include <linux/mtd/mtd-abi.h>
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static int ath79_update_firmware(struct bbu_handler *handler, struct bbu_data *data)
 {
 	int fd, ret;
 	struct stat s;
+	size_t size;
+	int erase_off;
 	enum filetype filetype;
-	unsigned oflags = O_WRONLY;
+	u32 oflags = O_WRONLY;
+	struct mtd_info_user mtdinfo;
+	u32 erasesize;
 
 	filetype = file_detect_type(data->image, data->len);
 	if ((filetype != filetype_uimage) &&
@@ -57,16 +65,46 @@ static int ath79_update_firmware(struct bbu_handler *handler, struct bbu_data *d
 		goto err_close;
 	}
 
-	ret = erase(fd, data->len, 0);
-	if (ret && ret != -ENOSYS) {
-		printf("erasing %s failed with %s\n", data->devicefile,
-				strerror(-ret));
-		goto err_close;
+	ioctl(fd, MEMGETINFO, &mtdinfo);
+
+	erase_off = 0;
+	erasesize = mtdinfo.erasesize;
+
+	printf("Erasing...\n");
+	init_progression_bar(data->len);
+
+	while (erase_off + erasesize < data->len) {
+		ret = erase(fd, erasesize, erase_off);
+		if (ret && ret != -ENOSYS) {
+			printf("erasing %s failed with %s\n", data->devicefile,
+					strerror(-ret));
+			goto err_close;
+		}
+
+		erase_off += erasesize;
+
+		show_progress(erase_off);
 	}
 
-	ret = write_full(fd, data->image, data->len);
-	if (ret < 0)
-		goto err_close;
+	printf("\nWriting...\n");
+	init_progression_bar(data->len);
+
+	size = data->len;
+
+	while (size) {
+		ret = write(fd, data->image, MIN(1024, size));
+		if (ret < 0)
+			goto err_close;
+		else if (ret == 0)
+			break;
+
+		size -= ret;
+		data->image += ret;
+
+		show_progress(data->len - size);
+	}
+
+	printf("\n");
 
 	protect(fd, data->len, 0, 1);
 
