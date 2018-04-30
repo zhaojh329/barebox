@@ -14,12 +14,84 @@
 #include <common.h>
 #include <bbu.h>
 #include <init.h>
+#include <fs.h>
+#include <fcntl.h>
+#include <libfile.h>
+
+static int ath79_update_firmware(struct bbu_handler *handler, struct bbu_data *data)
+{
+	int fd, ret;
+	struct stat s;
+	enum filetype filetype;
+	unsigned oflags = O_WRONLY;
+
+	filetype = file_detect_type(data->image, data->len);
+	if ((filetype != filetype_uimage) &&
+		(filetype != filetype_tplinkfw)) {
+		if (!bbu_force(data, "incorrect image type."))
+			return -EINVAL;
+	}
+
+	ret = stat(data->devicefile, &s);
+	if (ret) {
+		oflags |= O_CREAT;
+	} else {
+		if (!S_ISREG(s.st_mode) && s.st_size < data->len) {
+			printf("Image (%zd) is too big for device (%lld)\n",
+					data->len, s.st_size);
+		}
+	}
+
+	ret = bbu_confirm(data);
+	if (ret)
+		return ret;
+
+	fd = open(data->devicefile, oflags);
+	if (fd < 0)
+		return fd;
+
+	ret = protect(fd, data->len, 0, 0);
+	if (ret && ret != -ENOSYS) {
+		printf("unprotecting %s failed with %s\n", data->devicefile,
+				strerror(-ret));
+		goto err_close;
+	}
+
+	ret = erase(fd, data->len, 0);
+	if (ret && ret != -ENOSYS) {
+		printf("erasing %s failed with %s\n", data->devicefile,
+				strerror(-ret));
+		goto err_close;
+	}
+
+	ret = write_full(fd, data->image, data->len);
+	if (ret < 0)
+		goto err_close;
+
+	protect(fd, data->len, 0, 1);
+
+	ret = 0;
+
+err_close:
+	close(fd);
+
+	return ret;
+}
 
 static int ath79_init_bbu(void)
 {
+	struct bbu_handler *handler;
+
 	bbu_register_std_file_update("barebox", BBU_HANDLER_FLAG_DEFAULT,
-				     "/dev/spiflash.barebox",
-				     filetype_mips_barebox);
+					"/dev/spiflash.barebox",
+					filetype_mips_barebox);
+
+	handler = xzalloc(sizeof(*handler));
+	handler->name = "firmware";
+	handler->devicefile = "/dev/spiflash.firmware";
+	handler->handler = ath79_update_firmware;
+
+	bbu_register_handler(handler);
 
 	return 0;
 }
