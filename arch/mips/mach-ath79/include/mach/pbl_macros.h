@@ -61,6 +61,9 @@ xtal_is_25MHz:
 
 	pbl_sleep	t2, 40
 
+	/* enable switch core */
+	pbl_reg_clr BIT(3), (PLL_BASE | AR933X_ETHSW_CLOCK_CONTROL_REG)
+
 	.set	pop
 .endm
 
