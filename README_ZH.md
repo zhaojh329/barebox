@@ -10,20 +10,6 @@
 	make embedsky_tq210_defconfig
 	make
 
-# SD卡烧写
-
-    将barebox.s5p烧写到SD卡的扇区1，从SD卡启动
-
-# Nand烧写
-
-    首先从SD卡启动，配置网络（使用nv命令），然后通过tftp命令下载barebox.s5p
-
-    tftp barebox.s5p
-
-    然后执行命令barebox_update将下载的barebox.s5p烧写到Nand
-
-    barebox_update -y barebox.s5p
-
 # TFTP文件系统
 
 	TFTP并没有实现一个文件系统，不支持列出目录。也就是说对一个使用TFTP挂载的目录执行ls命令将会显示空，然而文件确实在那里。
