@@ -25,6 +25,18 @@
             default-state = "off";
         };
     };
+
+    gpio-keys {
+        compatible = "gpio-keys";
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        reset {
+            label = "Reset";
+            linux,code = <KEY_STOP>;
+            gpios = <&gpio 23 GPIO_ACTIVE_LOW>;
+        };
+    };
 };
 
 &uart {
