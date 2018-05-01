@@ -30,6 +30,8 @@ static int do_bootm_linux(struct image_data *data)
     int ret;
     void (*kernel)(void) = (void *)data->os_address;
 
+    printf("Loading kernel to sdram...\n");
+
     ret = bootm_load_os(data, data->os_address);
     if (ret)
         return ret;
