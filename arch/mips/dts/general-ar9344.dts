@@ -12,6 +12,7 @@
 	aliases {
 		serial0 = &uart0;
 		spiflash = &spiflash;
+		spi0 = &spi;
 	};
 
 	chosen {
