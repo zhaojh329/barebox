@@ -43,7 +43,8 @@ static struct image_handler *bootm_find_handler(enum filetype filetype,
 				handler->filetype == filetype)
 			return handler;
 		if  (filetype == filetype_uimage &&
-				handler->ih_os == data->os->header.ih_os)
+				handler->ih_os == data->os->header.ih_os &&
+				handler->filetype == filetype)
 			return handler;
 	}
 
