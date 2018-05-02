@@ -67,6 +67,6 @@
 	};
 };
 
-&mac0 {
+&eth1 {
 	status = "okay";
 };

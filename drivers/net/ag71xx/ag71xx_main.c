@@ -265,6 +265,9 @@ static void ag71xx_setup_gmac_933x(struct device_node *np, void __iomem *base)
 	ag71xx_of_bit(np, "switch-phy-addr-swap", &val,
 		AR933X_ETH_CFG_SW_PHY_ADDR_SWAP);
 
+	/* For AR934X */
+	ag71xx_of_bit(np, "switch-only-mode", &val, AR934X_ETH_CFG_SW_ONLY_MODE);
+
 	__raw_writel(val, base + AR933X_GMAC_REG_ETH_CFG);
 }
 

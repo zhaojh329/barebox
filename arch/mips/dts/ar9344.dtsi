@@ -74,16 +74,63 @@
 
 				status = "disabled";
 			};
-		};
 
-		mac0: mac@19000000 {
-			compatible = "qca,ar9344-gmac0";
-			reg = <0x18070000 0x00000100>,
-			      <0x19000000 0x01000000>;
-			reg-names = "gmac", "ge0";
-			phy-mode = "rgmii";
+			rst: reset-controller@1806001c {
+				compatible = "qca,ar7100-reset";
+				reg = <0x1806001c 0x4>;
 
-			status = "disabled";
+				#reset-cells = <1>;
+			};
+
+			gmac: gmac@18070000 {
+				compatible = "qca,ar9330-gmac";
+				reg = <0x18070000 0x14>;
+			};
+
+			eth0: eth@19000000 {
+				status = "disabled";
+
+				compatible = "qca,ar9330-eth";
+				reg = <0x19000000 0x200>;
+
+				phy-mode = "mii";
+
+				resets = <&rst 9>, <&rst 22>;
+				reset-names = "mac", "mdio";
+
+				mdio: mdio-bus {
+					status = "okay";
+				};
+			};
+
+			eth1: eth@1a000000 {
+				status = "disabled";
+
+				compatible = "qca,ar9330-eth";
+				reg = <0x1a000000 0x200>;
+
+				phy-mode = "gmii";
+
+				resets = <&rst 8>, <&rst 12>, <&rst 13>, <&rst 23>;
+				reset-names = "esw", "esw_analog", "mac", "mdio";
+
+				fixed-link {
+					speed = <1000>;
+					full-duplex;
+				};
+
+				switch_mdio: mdio-bus {
+					status = "okay";
+
+					builtin-switch;
+				};
+
+				gmac-config {
+					device = <&gmac>;
+
+					switch-only-mode = <1>;
+				};
+			};
 		};
 	};
 };
