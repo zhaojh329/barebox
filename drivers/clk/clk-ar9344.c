@@ -18,145 +18,13 @@
 #include <linux/clk.h>
 #include <linux/clkdev.h>
 #include <linux/err.h>
+#include <asm-generic/div64.h>
 
 #include <mach/ath79.h>
 #include <dt-bindings/clock/ath79-clk.h>
 
-#define AR9344_OUTDIV_M				0x3
-#define AR9344_OUTDIV_S				19
-#define AR9344_REFDIV_M				0x1f
-#define AR9344_REFDIV_S				12
-#define AR9344_NINT_M				0x3f
-#define AR9344_NINT_S				6
-#define AR9344_NFRAC_M				0x3f
-#define AR9344_NFRAC_S				0
-
 static struct clk *clks[ATH79_CLK_END];
 static struct clk_onecell_data clk_data;
-
-struct clk_ar9344 {
-	struct clk clk;
-	void __iomem *base;
-	const char *parent;
-};
-
-static unsigned long ar934x_cpupll_to_hz(const u32 regval, unsigned long xtal)
-{
-	const u32 outdiv = (regval >> AR934X_PLL_CPU_CONFIG_OUTDIV_SHIFT) &
-			   AR934X_PLL_CPU_CONFIG_OUTDIV_MASK;
-	const u32 refdiv = (regval >> AR934X_PLL_CPU_CONFIG_REFDIV_SHIFT) &
-			   AR934X_PLL_CPU_CONFIG_REFDIV_MASK;
-	const u32 nint = (regval >> AR934X_PLL_CPU_CONFIG_NINT_SHIFT) &
-			   AR934X_PLL_CPU_CONFIG_NINT_MASK;
-	const u32 nfrac = (regval >> AR934X_PLL_CPU_CONFIG_NFRAC_SHIFT) &
-			   AR934X_PLL_CPU_CONFIG_NFRAC_MASK;
-
-	return (xtal * (nint + (nfrac >> 9))) / (refdiv * (1 << outdiv));
-}
-
-static unsigned long ar934x_ddrpll_to_hz(const u32 regval, unsigned long xtal)
-{
-	const u32 outdiv = (regval >> AR934X_PLL_DDR_CONFIG_OUTDIV_SHIFT) &
-			   AR934X_PLL_DDR_CONFIG_OUTDIV_MASK;
-	const u32 refdiv = (regval >> AR934X_PLL_DDR_CONFIG_REFDIV_SHIFT) &
-			   AR934X_PLL_DDR_CONFIG_REFDIV_MASK;
-	const u32 nint = (regval >> AR934X_PLL_DDR_CONFIG_NINT_SHIFT) &
-			   AR934X_PLL_DDR_CONFIG_NINT_MASK;
-	const u32 nfrac = (regval >> AR934X_PLL_DDR_CONFIG_NFRAC_SHIFT) &
-			   AR934X_PLL_DDR_CONFIG_NFRAC_MASK;
-
-	return (xtal * (nint + (nfrac >> 9))) / (refdiv * (1 << outdiv));
-}
-
-static unsigned long clk_ar9344_recalc_rate(struct clk *clk,
-	unsigned long parent_rate)
-{
-	struct clk_ar9344 *f = container_of(clk, struct clk_ar9344, clk);
-	u32 ctrl, cpu, cpupll, ddr, ddrpll;
-	u32 cpudiv, ddrdiv, busdiv;
-	u32 cpuclk, ddrclk, busclk;
-
-	cpu = __raw_readl(f->base + AR934X_PLL_CPU_CONFIG_REG);
-	ddr = __raw_readl(f->base + AR934X_PLL_DDR_CONFIG_REG);
-	ctrl = __raw_readl(f->base + AR934X_PLL_CPU_DDR_CLK_CTRL_REG);
-
-	cpupll = ar934x_cpupll_to_hz(cpu, parent_rate);
-	ddrpll = ar934x_ddrpll_to_hz(ddr, parent_rate);
-
-	if (!strcmp(clk->name, "cpu")) {
-		if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_PLL_BYPASS)
-			cpuclk = parent_rate;
-		else if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_CPUCLK_FROM_CPUPLL)
-			cpuclk = cpupll;
-		else
-			cpuclk = ddrpll;
-
-
-		cpudiv = (ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_POST_DIV_SHIFT) &
-			AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_POST_DIV_MASK;
-
-		return cpuclk / (cpudiv + 1);
-	}
-
-	if (!strcmp(clk->name, "ddr")) {
-		if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_PLL_BYPASS)
-			ddrclk = parent_rate;
-		else if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_DDRCLK_FROM_DDRPLL)
-			ddrclk = ddrpll;
-		else
-			ddrclk = cpupll;
-
-		ddrdiv = (ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_POST_DIV_SHIFT) &
-			AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_POST_DIV_MASK;
-
-		return ddrclk / (ddrdiv + 1);
-	}
-
-	if (!strcmp(clk->name, "ahb")) {
-		if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_PLL_BYPASS)
-			busclk = parent_rate;
-		else if (ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_AHBCLK_FROM_DDRPLL)
-			busclk = ddrpll;
-		else
-			busclk = cpupll;
-
-		busdiv = (ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_POST_DIV_SHIFT) &
-			AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_POST_DIV_MASK;
-
-		return busclk / (busdiv + 1);
-	}
-
-	return 0;
-}
-
-struct clk_ops clk_ar9344_ops = {
-	.recalc_rate = clk_ar9344_recalc_rate,
-};
-
-static struct clk *clk_ar9344(const char *name, const char *parent,
-	void __iomem *base)
-{
-	struct clk_ar9344 *f = xzalloc(sizeof(*f));
-
-	f->parent = parent;
-	f->base = base;
-
-	f->clk.ops = &clk_ar9344_ops;
-	f->clk.name = name;
-	f->clk.parent_names = &f->parent;
-	f->clk.num_parents = 1;
-
-	clk_register(&f->clk);
-
-	return &f->clk;
-}
-
-static void ar9344_pll_init(void __iomem *base)
-{
-	clks[ATH79_CLK_CPU] = clk_ar9344("cpu", "ref", base);
-	clks[ATH79_CLK_DDR] = clk_ar9344("ddr", "ref", base);
-	clks[ATH79_CLK_AHB] = clk_ar9344("ahb", "ref", base);
-}
 
 static u32 clk_get_rate_mhz(const char *name)
 {
@@ -168,17 +36,136 @@ static u32 clk_get_rate_mhz(const char *name)
 	return 0;
 }
 
+static u32 __init ar934x_get_pll_freq(u32 ref, u32 ref_div, u32 nint, u32 nfrac,
+				      u32 frac, u32 out_div)
+{
+	u64 t;
+	u32 ret;
+
+	t = ref;
+	t *= nint;
+	do_div(t, ref_div);
+	ret = t;
+
+	t = ref;
+	t *= nfrac;
+	do_div(t, ref_div * frac);
+	ret += t;
+
+	ret /= (1 << out_div);
+	return ret;
+}
+
+static void ar9344_pll_init(void __iomem *pll_base, void __iomem *srif_base)
+{
+	unsigned long ref_rate;
+	unsigned long cpu_rate;
+	unsigned long ddr_rate;
+	unsigned long ahb_rate;
+	u32 pll, out_div, ref_div, nint, nfrac, frac, clk_ctrl, postdiv;
+	u32 cpu_pll, ddr_pll;
+
+	ref_rate = clk_get_rate_mhz("ref") * 1000 * 1000;
+
+	pll = __raw_readl(srif_base + AR934X_SRIF_CPU_DPLL2_REG);
+	if (pll & AR934X_SRIF_DPLL2_LOCAL_PLL) {
+		out_div = (pll >> AR934X_SRIF_DPLL2_OUTDIV_SHIFT) &
+			  AR934X_SRIF_DPLL2_OUTDIV_MASK;
+		pll = __raw_readl(srif_base + AR934X_SRIF_CPU_DPLL1_REG);
+		nint = (pll >> AR934X_SRIF_DPLL1_NINT_SHIFT) &
+		       AR934X_SRIF_DPLL1_NINT_MASK;
+		nfrac = pll & AR934X_SRIF_DPLL1_NFRAC_MASK;
+		ref_div = (pll >> AR934X_SRIF_DPLL1_REFDIV_SHIFT) &
+			  AR934X_SRIF_DPLL1_REFDIV_MASK;
+		frac = 1 << 18;
+	} else {
+		pll = __raw_readl(pll_base + AR934X_PLL_CPU_CONFIG_REG);
+		out_div = (pll >> AR934X_PLL_CPU_CONFIG_OUTDIV_SHIFT) &
+			AR934X_PLL_CPU_CONFIG_OUTDIV_MASK;
+		ref_div = (pll >> AR934X_PLL_CPU_CONFIG_REFDIV_SHIFT) &
+			  AR934X_PLL_CPU_CONFIG_REFDIV_MASK;
+		nint = (pll >> AR934X_PLL_CPU_CONFIG_NINT_SHIFT) &
+		       AR934X_PLL_CPU_CONFIG_NINT_MASK;
+		nfrac = (pll >> AR934X_PLL_CPU_CONFIG_NFRAC_SHIFT) &
+			AR934X_PLL_CPU_CONFIG_NFRAC_MASK;
+		frac = 1 << 6;
+	}
+
+	cpu_pll = ar934x_get_pll_freq(ref_rate, ref_div, nint,
+				      nfrac, frac, out_div);
+
+	pll = __raw_readl(srif_base + AR934X_SRIF_DDR_DPLL2_REG);
+	if (pll & AR934X_SRIF_DPLL2_LOCAL_PLL) {
+		out_div = (pll >> AR934X_SRIF_DPLL2_OUTDIV_SHIFT) &
+			  AR934X_SRIF_DPLL2_OUTDIV_MASK;
+		pll = __raw_readl(srif_base + AR934X_SRIF_DDR_DPLL1_REG);
+		nint = (pll >> AR934X_SRIF_DPLL1_NINT_SHIFT) &
+		       AR934X_SRIF_DPLL1_NINT_MASK;
+		nfrac = pll & AR934X_SRIF_DPLL1_NFRAC_MASK;
+		ref_div = (pll >> AR934X_SRIF_DPLL1_REFDIV_SHIFT) &
+			  AR934X_SRIF_DPLL1_REFDIV_MASK;
+		frac = 1 << 18;
+	} else {
+		pll = __raw_readl(pll_base + AR934X_PLL_DDR_CONFIG_REG);
+		out_div = (pll >> AR934X_PLL_DDR_CONFIG_OUTDIV_SHIFT) &
+			  AR934X_PLL_DDR_CONFIG_OUTDIV_MASK;
+		ref_div = (pll >> AR934X_PLL_DDR_CONFIG_REFDIV_SHIFT) &
+			   AR934X_PLL_DDR_CONFIG_REFDIV_MASK;
+		nint = (pll >> AR934X_PLL_DDR_CONFIG_NINT_SHIFT) &
+		       AR934X_PLL_DDR_CONFIG_NINT_MASK;
+		nfrac = (pll >> AR934X_PLL_DDR_CONFIG_NFRAC_SHIFT) &
+			AR934X_PLL_DDR_CONFIG_NFRAC_MASK;
+		frac = 1 << 10;
+	}
+
+	ddr_pll = ar934x_get_pll_freq(ref_rate, ref_div, nint,
+				      nfrac, frac, out_div);
+
+	clk_ctrl = __raw_readl(pll_base + AR934X_PLL_CPU_DDR_CLK_CTRL_REG);
+
+	postdiv = (clk_ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_POST_DIV_SHIFT) &
+		  AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_POST_DIV_MASK;
+
+	if (clk_ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_CPU_PLL_BYPASS)
+		cpu_rate = ref_rate;
+	else if (clk_ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_CPUCLK_FROM_CPUPLL)
+		cpu_rate = cpu_pll / (postdiv + 1);
+	else
+		cpu_rate = ddr_pll / (postdiv + 1);
+
+	postdiv = (clk_ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_POST_DIV_SHIFT) &
+		  AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_POST_DIV_MASK;
+
+	if (clk_ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_DDR_PLL_BYPASS)
+		ddr_rate = ref_rate;
+	else if (clk_ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_DDRCLK_FROM_DDRPLL)
+		ddr_rate = ddr_pll / (postdiv + 1);
+	else
+		ddr_rate = cpu_pll / (postdiv + 1);
+
+	postdiv = (clk_ctrl >> AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_POST_DIV_SHIFT) &
+		  AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_POST_DIV_MASK;
+
+	if (clk_ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_AHB_PLL_BYPASS)
+		ahb_rate = ref_rate;
+	else if (clk_ctrl & AR934X_PLL_CPU_DDR_CLK_CTRL_AHBCLK_FROM_DDRPLL)
+		ahb_rate = ddr_pll / (postdiv + 1);
+	else
+		ahb_rate = cpu_pll / (postdiv + 1);
+
+	clks[ATH79_CLK_CPU] = clk_fixed("cpu", cpu_rate);
+	clks[ATH79_CLK_DDR] = clk_fixed("ddr", ddr_rate);
+	clks[ATH79_CLK_AHB] = clk_fixed("ahb", ahb_rate);
+}
+
 static int ar9344_clk_probe(struct device_d *dev)
 {
-	struct resource *iores;
-	void __iomem *base;
+	void __iomem *pll_base, *srif_base;
 
-	iores = dev_request_mem_resource(dev, 0);
-	if (IS_ERR(iores))
-		return PTR_ERR(iores);
-	base = IOMEM(iores->start);
+	pll_base = dev_request_mem_region_by_name(dev, "pll");
+	srif_base = dev_request_mem_region_by_name(dev, "srif");
 
-	ar9344_pll_init(base);
+	ar9344_pll_init(pll_base, srif_base);
 
 	clk_data.clks = clks;
 	clk_data.clk_num = ARRAY_SIZE(clks);
