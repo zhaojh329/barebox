@@ -1108,8 +1108,7 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode,
 
 	nor->read_dummy = spi_nor_read_dummy_cycles(nor);
 
-	dev_info(dev, "%s (%lld Kbytes)\n", id->name,
-			(long long)mtd->size >> 10);
+	dev_info(dev, "%s (%s)\n", id->name, size_human_readable(mtd->size));
 
 	dev_dbg(dev,
 		"mtd .name = %s, .size = 0x%llx (%lldMiB), "

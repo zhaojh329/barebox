@@ -31,7 +31,7 @@ static int add_memory_bank(void)
         size = get_ram_size((void *)KSEG1, SZ_256M);
         barebox_add_memory_bank("kseg1_ram0", KSEG1, size);
     }
-    pr_info("DRAM: %u MB\n", size / SZ_1M);
+    pr_info("DRAM: %s\n", size_human_readable(size));
     return 0;
 }
 
