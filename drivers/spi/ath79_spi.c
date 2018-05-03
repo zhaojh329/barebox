@@ -239,6 +239,38 @@ static int ath79_spi_transfer(struct spi_device *spi, struct spi_message *mesg)
     return 0;
 }
 
+static bool ath79_spi_flash_read_supported(struct spi_device *spi)
+{
+    if (spi->chip_select)
+        return false;
+
+    return true;
+}
+
+static int ath79_spi_read_flash_data(struct spi_device *spi,
+                     struct spi_flash_read_message *msg)
+{
+    struct ath79_spi *sp = ath79_spidev_to_sp(spi);
+
+    if (msg->addr_width > 3)
+        return -EOPNOTSUPP;
+
+    /* disable GPIO mode */
+    ath79_spi_wr(sp, AR71XX_SPI_REG_FS, 0);
+
+    memcpy(msg->buf, sp->base + msg->from, msg->len);
+
+    /* enable GPIO mode */
+    ath79_spi_wr(sp, AR71XX_SPI_REG_FS, AR71XX_SPI_FS_GPIO);
+
+    /* restore IOC register */
+    ath79_spi_wr(sp, AR71XX_SPI_REG_IOC, sp->ioc_base);
+
+    msg->retlen = msg->len;
+
+    return 0;
+}
+
 static int ath79_spi_probe(struct device_d *dev)
 {
     struct resource *iores;
@@ -257,6 +289,9 @@ static int ath79_spi_probe(struct device_d *dev)
     master->setup = ath79_spi_setup;
     master->transfer = ath79_spi_transfer;
     master->num_chipselect = 3;
+
+    master->spi_flash_read = ath79_spi_read_flash_data;
+    master->flash_read_supported = ath79_spi_flash_read_supported;
 
     if (IS_ENABLED(CONFIG_OFDEVICE)) {
         struct device_node *node = dev->device_node;

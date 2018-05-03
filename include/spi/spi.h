@@ -91,6 +91,7 @@ struct spi_device {
 };
 
 struct spi_message;
+struct spi_flash_read_message;
 
 /**
  * struct spi_master - interface to SPI master controller
@@ -107,6 +108,9 @@ struct spi_message;
  *	It's always safe to call this unless transfers are pending on
  *	the device whose settings are being modified.
  * @transfer: adds a message to the controller's transfer queue.
+ * @spi_flash_read: to support spi-controller hardwares that provide
+ *                  accelerated interface to read from flash devices.
+ * @flash_read_supported: spi device supports flash read
  * @cleanup: frees controller-specific state
  *
  * Each SPI master controller can communicate with one or more @spi_device
@@ -160,6 +164,10 @@ struct spi_master {
 	 */
 	int			(*transfer)(struct spi_device *spi,
 						struct spi_message *mesg);
+
+	int 		(*spi_flash_read)(struct  spi_device *spi,
+						struct spi_flash_read_message *msg);
+	bool 		(*flash_read_supported)(struct spi_device *spi);
 
 	/* called on release() to free memory provided by spi_master */
 	void			(*cleanup)(struct spi_device *spi);
@@ -427,6 +435,35 @@ static inline ssize_t spi_w8r8(struct spi_device *spi, u8 cmd)
 
 	/* return negative errno or unsigned value */
 	return (status < 0) ? status : result;
+}
+
+/**
+ * struct spi_flash_read_message - flash specific information for
+ * spi-masters that provide accelerated flash read interfaces
+ * @buf: buffer to read data
+ * @from: offset within the flash from where data is to be read
+ * @len: length of data to be read
+ * @retlen: actual length of data read
+ * @read_opcode: read_opcode to be used to communicate with flash
+ * @addr_width: number of address bytes
+ * @dummy_bytes: number of dummy bytes
+ */
+struct spi_flash_read_message {
+	void *buf;
+	loff_t from;
+	size_t len;
+	size_t retlen;
+	u8 read_opcode;
+	u8 addr_width;
+	u8 dummy_bytes;
+};
+
+/* SPI core interface for flash read support */
+static inline bool spi_flash_read_supported(struct spi_device *spi)
+{
+	return spi->master->spi_flash_read &&
+	       (!spi->master->flash_read_supported ||
+	       spi->master->flash_read_supported(spi));
 }
 
 extern struct bus_type spi_bus;

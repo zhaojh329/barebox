@@ -124,6 +124,28 @@ static int m25p80_read(struct spi_nor *nor, loff_t from, size_t len,
 	/* convert the dummy cycles to the number of bytes */
 	dummy /= 8;
 
+	if (spi_flash_read_supported(spi)) {
+		int ret;
+		struct spi_flash_read_message msg;
+
+		memset(&msg, 0, sizeof(msg));
+
+		msg.buf = buf;
+		msg.from = from;
+		msg.len = len;
+		msg.read_opcode = nor->read_opcode;
+		msg.addr_width = nor->addr_width;
+		msg.dummy_bytes = dummy;
+
+		ret = spi->master->spi_flash_read(spi, &msg);
+		if (ret != -EOPNOTSUPP) {
+			if (ret < 0)
+				return ret;
+			*retlen = msg.retlen;
+			return 0;
+		}
+	}
+
 	spi_message_init(&m);
 	memset(t, 0, (sizeof t));
 
