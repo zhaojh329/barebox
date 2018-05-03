@@ -22,284 +22,300 @@
 #include <spi/spi.h>
 #include <io.h>
 #include <clock.h>
+#include <linux/clk.h>
+
+#define ATH79_SPI_RRW_DELAY_FACTOR  12000
+#define MHZ             (1000 * 1000)
 
 struct ath79_spi {
-	struct spi_master	master;
-	void __iomem		*regs;
-	u32			val;
-	u32			reg_ctrl;
+    struct spi_master   master;
+    u32                 ioc_base;
+    u32                 reg_ctrl;
+    void __iomem        *base;
+    unsigned            rrw_delay;
 };
 
-#define AR71XX_SPI_REG_FS	0x00	/* Function Select */
-#define AR71XX_SPI_REG_CTRL	0x04	/* SPI Control */
-#define AR71XX_SPI_REG_IOC	0x08	/* SPI I/O Control */
-#define AR71XX_SPI_REG_RDS	0x0c	/* Read Data Shift */
+#define AR71XX_SPI_REG_FS   0x00    /* Function Select */
+#define AR71XX_SPI_REG_CTRL 0x04    /* SPI Control */
+#define AR71XX_SPI_REG_IOC  0x08    /* SPI I/O Control */
+#define AR71XX_SPI_REG_RDS  0x0c    /* Read Data Shift */
 
-#define AR71XX_SPI_FS_GPIO	BIT(0)	/* Enable GPIO mode */
+#define AR71XX_SPI_FS_GPIO  BIT(0)  /* Enable GPIO mode */
 
-#define AR71XX_SPI_IOC_DO	BIT(0)	/* Data Out pin */
-#define AR71XX_SPI_IOC_CLK	BIT(8)	/* CLK pin */
-#define AR71XX_SPI_IOC_CS(n)	BIT(16 + (n))
-#define AR71XX_SPI_IOC_CS0	AR71XX_SPI_IOC_CS(0)
-#define AR71XX_SPI_IOC_CS1	AR71XX_SPI_IOC_CS(1)
-#define AR71XX_SPI_IOC_CS2	AR71XX_SPI_IOC_CS(2)
-#define AR71XX_SPI_IOC_CS_ALL	(AR71XX_SPI_IOC_CS0 | AR71XX_SPI_IOC_CS1 | \
-				 AR71XX_SPI_IOC_CS2)
+#define AR71XX_SPI_IOC_DO   BIT(0)  /* Data Out pin */
+#define AR71XX_SPI_IOC_CLK  BIT(8)  /* CLK pin */
+#define AR71XX_SPI_IOC_CS(n)    BIT(16 + (n))
+#define AR71XX_SPI_IOC_CS0  AR71XX_SPI_IOC_CS(0)
+#define AR71XX_SPI_IOC_CS1  AR71XX_SPI_IOC_CS(1)
+#define AR71XX_SPI_IOC_CS2  AR71XX_SPI_IOC_CS(2)
+#define AR71XX_SPI_IOC_CS_ALL   (AR71XX_SPI_IOC_CS0 | AR71XX_SPI_IOC_CS1 | \
+                 AR71XX_SPI_IOC_CS2)
 
-static inline u32 ath79_spi_rr(struct ath79_spi *sp, int reg)
+static inline u32 ath79_spi_rr(struct ath79_spi *sp, unsigned reg)
 {
-	return __raw_readl(sp->regs + reg);
+    return __raw_readl(sp->base + reg);
 }
 
-static inline void ath79_spi_wr(struct ath79_spi *sp, u32 val, int reg)
+static inline void ath79_spi_wr(struct ath79_spi *sp, unsigned reg, u32 val)
 {
-	__raw_writel(val, sp->regs + reg);
-}
-
-static inline void setbits(struct ath79_spi *sp, int bits, int on)
-{
-	/*
-	 * We are the only user of SCSPTR so no locking is required.
-	 * Reading bit 2 and 0 in SCSPTR gives pin state as input.
-	 * Writing the same bits sets the output value.
-	 * This makes regular read-modify-write difficult so we
-	 * use sp->val to keep track of the latest register value.
-	 */
-
-	if (on)
-		sp->val |= bits;
-	else
-		sp->val &= ~bits;
-
-	ath79_spi_wr(sp, sp->val, AR71XX_SPI_REG_IOC);
+    __raw_writel(val, sp->base + reg);
 }
 
 static inline struct ath79_spi *ath79_spidev_to_sp(struct spi_device *spi)
 {
-	return container_of(spi->master, struct ath79_spi, master);
+    return container_of(spi->master, struct ath79_spi, master);
 }
 
-static inline void setsck(struct spi_device *spi, int on)
+static inline void ath79_spi_delay(struct ath79_spi *sp, unsigned nsecs)
 {
-	struct ath79_spi *sc = ath79_spidev_to_sp(spi);
-
-	setbits(sc, AR71XX_SPI_IOC_CLK, on);
+    if (nsecs > sp->rrw_delay)
+        ndelay(nsecs - sp->rrw_delay);
 }
 
-static inline void setmosi(struct spi_device *spi, int on)
+static void ath79_spi_chipselect(struct spi_device *spi, int is_active)
 {
-	struct ath79_spi *sc = ath79_spidev_to_sp(spi);
+    struct ath79_spi *sp = ath79_spidev_to_sp(spi);
+    int cs_high = (spi->mode & SPI_CS_HIGH) ? is_active : !is_active;
+    u32 cs_bit = AR71XX_SPI_IOC_CS(spi->chip_select);
 
-	setbits(sc, AR71XX_SPI_IOC_DO, on);
-}
+    if (is_active) {
+        /* set initial clock polarity */
+        if (spi->mode & SPI_CPOL)
+            sp->ioc_base |= AR71XX_SPI_IOC_CLK;
+        else
+            sp->ioc_base &= ~AR71XX_SPI_IOC_CLK;
 
-static inline u32 getmiso(struct spi_device *spi)
-{
-	struct ath79_spi *sc = ath79_spidev_to_sp(spi);
+        ath79_spi_wr(sp, AR71XX_SPI_REG_IOC, sp->ioc_base);
+    }
 
-	return !!((ath79_spi_rr(sc, AR71XX_SPI_REG_RDS) & 1));
-}
+    if (cs_high)
+        sp->ioc_base |= cs_bit;
+    else
+        sp->ioc_base &= ~cs_bit;
 
-#define spidelay(nsecs) udelay(nsecs/1000)
-
-#include "spi-bitbang-txrx.h"
-
-static inline void ath79_spi_chipselect(struct ath79_spi *sp, int chipselect)
-{
-	int off_bits;
-
-	off_bits = 0xffffffff;
-
-	switch (chipselect) {
-	case 0:
-		off_bits &= ~AR71XX_SPI_IOC_CS0;
-		break;
-
-	case 1:
-		off_bits &= ~AR71XX_SPI_IOC_CS1;
-		break;
-
-	case 2:
-		off_bits &= ~AR71XX_SPI_IOC_CS2;
-		break;
-
-	case 3:
-		break;
-	}
-
-	/* by default inactivate chip selects */
-	sp->val |= AR71XX_SPI_IOC_CS_ALL;
-	sp->val &= off_bits;
-
-	ath79_spi_wr(sp, sp->val, AR71XX_SPI_REG_IOC);
-}
-
-static int ath79_spi_setup(struct spi_device *spi)
-{
-	struct spi_master *master = spi->master;
-	struct device_d spi_dev = spi->dev;
-
-	if (spi->bits_per_word != 8) {
-		dev_err(master->dev, "master doesn't support %d bits per word requested by %s\n",
-			spi->bits_per_word, spi_dev.name);
-		return -EINVAL;
-	}
-
-	if ((spi->mode & (SPI_CPHA | SPI_CPOL)) != SPI_MODE_0) {
-		dev_err(master->dev, "master doesn't support SPI_MODE%d requested by %s\n",
-			spi->mode & (SPI_CPHA | SPI_CPOL), spi_dev.name);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int ath79_spi_read(struct spi_device *spi, void *buf, size_t nbyte)
-{
-	ssize_t cnt = 0;
-	u8 *rxf_buf = buf;
-
-	while (cnt < nbyte) {
-		*rxf_buf = bitbang_txrx_be_cpha1(spi, 1000, 1, 0, 8);
-		rxf_buf++;
-		cnt++;
-	}
-
-	return cnt;
-}
-
-static int ath79_spi_write(struct spi_device *spi,
-				const void *buf, size_t nbyte)
-{
-	ssize_t cnt = 0;
-	const u8 *txf_buf = buf;
-
-	while (cnt < nbyte) {
-		bitbang_txrx_be_cpha1(spi, 1000, 1, (u32)*txf_buf, 8);
-		txf_buf++;
-		cnt++;
-	}
-
-	return 0;
-}
-
-static int ath79_spi_transfer(struct spi_device *spi, struct spi_message *mesg)
-{
-	struct ath79_spi *sc = ath79_spidev_to_sp(spi);
-	struct spi_transfer *t;
-
-	mesg->actual_length = 0;
-
-	/* activate chip select signal */
-	ath79_spi_chipselect(sc, spi->chip_select);
-
-	list_for_each_entry(t, &mesg->transfers, transfer_list) {
-
-		if (t->tx_buf)
-			ath79_spi_write(spi, t->tx_buf, t->len);
-
-		if (t->rx_buf)
-			ath79_spi_read(spi, t->rx_buf, t->len);
-
-		mesg->actual_length += t->len;
-	}
-
-	/* inactivate chip select signal */
-	ath79_spi_chipselect(sc, -1);
-
-	return 0;
+    ath79_spi_wr(sp, AR71XX_SPI_REG_IOC, sp->ioc_base);
 }
 
 static void ath79_spi_enable(struct ath79_spi *sp)
 {
-	/* enable GPIO mode */
-	ath79_spi_wr(sp, AR71XX_SPI_FS_GPIO, AR71XX_SPI_REG_FS);
+    /* enable GPIO mode */
+    ath79_spi_wr(sp, AR71XX_SPI_REG_FS, AR71XX_SPI_FS_GPIO);
 
-	/* save CTRL register */
-	sp->reg_ctrl = ath79_spi_rr(sp, AR71XX_SPI_REG_CTRL);
-	sp->val = ath79_spi_rr(sp, AR71XX_SPI_REG_IOC);
+    /* save CTRL register */
+    sp->reg_ctrl = ath79_spi_rr(sp, AR71XX_SPI_REG_CTRL);
+    sp->ioc_base = ath79_spi_rr(sp, AR71XX_SPI_REG_IOC);
 
-	/* TODO: setup speed? */
-	ath79_spi_wr(sp, 0x41, AR71XX_SPI_REG_CTRL);
+    /* disable remap */
+    sp->reg_ctrl |= 1 << 6;
+    ath79_spi_wr(sp, AR71XX_SPI_REG_CTRL, sp->reg_ctrl);
 }
 
 static void ath79_spi_disable(struct ath79_spi *sp)
 {
-	/* restore CTRL register */
-	ath79_spi_wr(sp, sp->reg_ctrl, AR71XX_SPI_REG_CTRL);
-	/* disable GPIO mode */
-	ath79_spi_wr(sp, 0, AR71XX_SPI_REG_FS);
+    /* restore CTRL register */
+    ath79_spi_wr(sp, AR71XX_SPI_REG_CTRL, sp->reg_ctrl);
+    /* disable GPIO mode */
+    ath79_spi_wr(sp, AR71XX_SPI_REG_FS, 0);
+}
+
+static int ath79_spi_setup_cs(struct spi_device *spi)
+{
+    struct ath79_spi *sp = ath79_spidev_to_sp(spi);
+    u32 cs_bit = AR71XX_SPI_IOC_CS(spi->chip_select);
+
+    if (spi->mode & SPI_CS_HIGH)
+        sp->ioc_base &= ~cs_bit;
+    else
+        sp->ioc_base |= cs_bit;
+
+    ath79_spi_wr(sp, AR71XX_SPI_REG_IOC, sp->ioc_base);
+
+    return 0;
+}
+
+static int ath79_spi_setup(struct spi_device *spi)
+{
+    struct spi_master *master = spi->master;
+    struct device_d spi_dev = spi->dev;
+
+    if (spi->bits_per_word != 8) {
+        dev_err(master->dev, "master doesn't support %d bits per word requested by %s\n",
+            spi->bits_per_word, spi_dev.name);
+        return -EINVAL;
+    }
+
+    if ((spi->mode & (SPI_CPHA | SPI_CPOL)) != SPI_MODE_0) {
+        dev_err(master->dev, "master doesn't support SPI_MODE%d requested by %s\n",
+            spi->mode & (SPI_CPHA | SPI_CPOL), spi_dev.name);
+        return -EINVAL;
+    }
+
+    ath79_spi_setup_cs(spi);
+
+    return 0;
+}
+
+static u32 ath79_spi_txrx_mode0(struct spi_device *spi, unsigned nsecs,
+                   u32 word, u8 bits)
+{
+    struct ath79_spi *sp = ath79_spidev_to_sp(spi);
+    u32 ioc = sp->ioc_base;
+
+    /* clock starts at inactive polarity */
+    for (word <<= (32 - bits); likely(bits); bits--) {
+        u32 out;
+
+        if (word & (1 << 31))
+            out = ioc | AR71XX_SPI_IOC_DO;
+        else
+            out = ioc & ~AR71XX_SPI_IOC_DO;
+
+        /* setup MSB (to slave) on trailing edge */
+        ath79_spi_wr(sp, AR71XX_SPI_REG_IOC, out);
+        ath79_spi_delay(sp, nsecs);
+        ath79_spi_wr(sp, AR71XX_SPI_REG_IOC, out | AR71XX_SPI_IOC_CLK);
+        ath79_spi_delay(sp, nsecs);
+        if (bits == 1)
+            ath79_spi_wr(sp, AR71XX_SPI_REG_IOC, out);
+
+        word <<= 1;
+    }
+
+    return ath79_spi_rr(sp, AR71XX_SPI_REG_RDS);
+}
+
+static int ath79_spi_read(struct spi_device *spi, void *buf, size_t nbyte)
+{
+    ssize_t cnt = 0;
+    u8 *rxf_buf = buf;
+
+    while (cnt < nbyte) {
+        *rxf_buf = ath79_spi_txrx_mode0(spi, 1000, 0, 8);
+        rxf_buf++;
+        cnt++;
+    }
+
+    return cnt;
+}
+
+static int ath79_spi_write(struct spi_device *spi,
+                const void *buf, size_t nbyte)
+{
+    ssize_t cnt = 0;
+    const u8 *txf_buf = buf;
+
+    while (cnt < nbyte) {
+        ath79_spi_txrx_mode0(spi, 1000, (u32)*txf_buf, 8);
+        txf_buf++;
+        cnt++;
+    }
+
+    return 0;
+}
+
+static int ath79_spi_transfer(struct spi_device *spi, struct spi_message *mesg)
+{
+    struct spi_transfer *t;
+
+    mesg->actual_length = 0;
+
+    /* activate chip select signal */
+    ath79_spi_chipselect(spi, 1);
+
+    list_for_each_entry(t, &mesg->transfers, transfer_list) {
+
+        if (t->tx_buf)
+            ath79_spi_write(spi, t->tx_buf, t->len);
+
+        if (t->rx_buf)
+            ath79_spi_read(spi, t->rx_buf, t->len);
+
+        mesg->actual_length += t->len;
+    }
+
+    /* inactivate chip select signal */
+    ath79_spi_chipselect(spi, 0);
+
+    return 0;
 }
 
 static int ath79_spi_probe(struct device_d *dev)
 {
-	struct resource *iores;
-	struct spi_master *master;
-	struct ath79_spi *ath79_spi;
+    struct resource *iores;
+    struct spi_master *master;
+    struct ath79_spi *sp;
+    struct clk *clk;
+    unsigned long rate;
 
-	ath79_spi = xzalloc(sizeof(*ath79_spi));
-	dev->priv = ath79_spi;
+    sp = xzalloc(sizeof(*sp));
+    dev->priv = sp;
 
-	master = &ath79_spi->master;
-	master->dev = dev;
+    master = &sp->master;
+    master->dev = dev;
 
-	master->bus_num = dev->id;
-	master->setup = ath79_spi_setup;
-	master->transfer = ath79_spi_transfer;
-	master->num_chipselect = 3;
+    master->bus_num = dev->id;
+    master->setup = ath79_spi_setup;
+    master->transfer = ath79_spi_transfer;
+    master->num_chipselect = 3;
 
-	if (IS_ENABLED(CONFIG_OFDEVICE)) {
-		struct device_node *node = dev->device_node;
-		u32 num_cs;
-		int ret;
+    if (IS_ENABLED(CONFIG_OFDEVICE)) {
+        struct device_node *node = dev->device_node;
+        u32 num_cs;
+        int ret;
 
-		ret = of_property_read_u32(node, "num-chipselects", &num_cs);
-		if (ret)
-			num_cs = 3;
+        ret = of_property_read_u32(node, "num-chipselects", &num_cs);
+        if (ret)
+            num_cs = 3;
 
-		if (num_cs > 3) {
-			dev_err(dev, "master doesn't support num-chipselects > 3\n");
-		}
+        if (num_cs > 3) {
+            dev_err(dev, "master doesn't support num-chipselects > 3\n");
+        }
 
-		master->num_chipselect = num_cs;
-	}
+        master->num_chipselect = num_cs;
+    }
 
-	iores = dev_request_mem_resource(dev, 0);
-	if (IS_ERR(iores))
-		return PTR_ERR(iores);
-	ath79_spi->regs = IOMEM(iores->start);
+    iores = dev_request_mem_resource(dev, 0);
+    if (IS_ERR(iores))
+        return PTR_ERR(iores);
+    sp->base = IOMEM(iores->start);
 
-	/* enable gpio mode */
-	ath79_spi_enable(ath79_spi);
+    clk = clk_get(dev, "ahb");
+    if (IS_ERR(clk)) {
+        dev_err(dev, "could not get clk: ahb\n");
+        return  PTR_ERR(clk);
+    }
 
-	/* inactivate chip select signal */
-	ath79_spi_chipselect(ath79_spi, -1);
+    rate = DIV_ROUND_UP(clk_get_rate(clk), MHZ);
+    sp->rrw_delay = ATH79_SPI_RRW_DELAY_FACTOR / rate;
 
-	spi_register_master(master);
+    /* enable gpio mode */
+    ath79_spi_enable(sp);
 
-	return 0;
+    spi_register_master(master);
+
+    return 0;
 }
 
 static void ath79_spi_remove(struct device_d *dev)
 {
-	struct ath79_spi *sp = dev->priv;
+    struct ath79_spi *sp = dev->priv;
 
-	ath79_spi_disable(sp);
+    ath79_spi_disable(sp);
 }
 
 static __maybe_unused struct of_device_id ath79_spi_dt_ids[] = {
-	{
-		.compatible = "qca,ar7100-spi",
-	},
-	{
-		/* sentinel */
-	}
+    {
+        .compatible = "qca,ar7100-spi",
+    },
+    {
+        /* sentinel */
+    }
 };
 
 static struct driver_d ath79_spi_driver = {
-	.name  = "ath79-spi",
-	.probe = ath79_spi_probe,
-	.remove = ath79_spi_remove,
-	.of_compatible = DRV_OF_COMPAT(ath79_spi_dt_ids),
+    .name  = "ath79-spi",
+    .probe = ath79_spi_probe,
+    .remove = ath79_spi_remove,
+    .of_compatible = DRV_OF_COMPAT(ath79_spi_dt_ids),
 };
 device_platform_driver(ath79_spi_driver);

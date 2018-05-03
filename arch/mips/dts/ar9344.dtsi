@@ -74,6 +74,9 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 
+				clocks = <&pll ATH79_CLK_AHB>;
+				clock-names = "ahb";
+
 				status = "disabled";
 			};
 
