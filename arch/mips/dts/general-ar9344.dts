@@ -25,9 +25,12 @@
 	};
 };
 
+&gpio {
+	status = "okay";
+};
+
 &uart0 {
 	status = "okay";
-	clock-frequency = <40000000>;
 };
 
 &wdt0 {

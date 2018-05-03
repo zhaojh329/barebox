@@ -37,6 +37,18 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
+			gpio: gpio@18040000 {
+				compatible = "qca,ar7100-gpio";
+				reg = <0x18040000 0x6C>;
+
+				ngpios = <23>;
+
+				gpio-controller;
+				#gpio-cells = <2>;
+
+				status = "disabled";
+			};
+
 			uart0: uart@18020000 {
 				compatible = "ns16550a", "qca,ar9344-uart0";
 				reg = <0x18020000 0x20>;
@@ -44,6 +56,9 @@
 				reg-shift = <2>;
 				reg-io-width = <4>;
 				big-endian;
+
+				clocks = <&ref>;
+				clock-names = "uart";
 
 				status = "disabled";
 			};
