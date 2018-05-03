@@ -17,11 +17,6 @@
 
 	chosen {
 		stdout-path = &uart0;
-
-		environment@0 {
-			compatible = "barebox,environment";
-			device-path = &spiflash, "partname:barebox-environment";
-		};
 	};
 };
 
@@ -55,18 +50,8 @@
         };
 
         partition@20000 {
-            label = "barebox-environment";
-            reg = <0x20000 0x10000>;    /* 64K */
-        };
-
-        partition@30000 {
             label = "firmware";
-            reg = <0x30000 0x500000>;   /* 5M */
-        };
-
-        partition@530000 {
-            label = "art";
-            reg = <0x530000 0x10000>;   /* 64K */
+            reg = <0x20000 0x7d0000>;
         };
 	};
 };

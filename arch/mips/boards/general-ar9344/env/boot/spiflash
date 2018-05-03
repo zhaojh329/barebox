@@ -1,0 +1,3 @@
+#!/bin/sh
+
+global.bootm.image="/dev/spiflash.firmware"
