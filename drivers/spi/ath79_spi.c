@@ -190,7 +190,7 @@ static int ath79_spi_read(struct spi_device *spi, void *buf, size_t nbyte)
     u8 *rxf_buf = buf;
 
     while (cnt < nbyte) {
-        *rxf_buf = ath79_spi_txrx_mode0(spi, 1000, 0, 8);
+        *rxf_buf = ath79_spi_txrx_mode0(spi, 20, 0, 8);
         rxf_buf++;
         cnt++;
     }
@@ -205,7 +205,7 @@ static int ath79_spi_write(struct spi_device *spi,
     const u8 *txf_buf = buf;
 
     while (cnt < nbyte) {
-        ath79_spi_txrx_mode0(spi, 1000, (u32)*txf_buf, 8);
+        ath79_spi_txrx_mode0(spi, 20, (u32)*txf_buf, 8);
         txf_buf++;
         cnt++;
     }
