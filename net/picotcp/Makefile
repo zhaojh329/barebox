@@ -1,3 +1,8 @@
+PICO_BAREBOX=y
+ifneq ($(PICO_BAREBOX),)
+include $(srctree)/net/picotcp/barebox.mk
+else
+
 -include ../../config.mk
 -include ../../tools/kconfig/.config
 
@@ -493,3 +498,5 @@ coverity:
 	@tar czvf $(PREFIX)/coverity.tgz -C $(PREFIX) cov-int
 
 FORCE:
+
+endif

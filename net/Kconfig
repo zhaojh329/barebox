@@ -3,6 +3,19 @@ menuconfig NET
 
 if NET
 
+choice
+	prompt "network stack implementation"
+
+config NET_LEGACY
+	bool "legacy U-Boot network stack"
+
+config NET_PICOTCP
+	bool "picotcp network stack"
+	select POLLER
+
+endchoice
+
+if NET_LEGACY
 config NET_NFS
 	bool
 	prompt "nfs support"
@@ -30,5 +43,9 @@ config NET_DHCP
 config NET_SNTP
 	bool
 	prompt "sntp support"
+
+endif # NET_LEGACY
+
+source "net/picotcp/Kconfig"
 
 endif

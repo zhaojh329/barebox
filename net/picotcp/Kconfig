@@ -1,0 +1,37 @@
+if NET_PICOTCP
+
+config NET_PICO_SUPPORT_ETH
+	bool "ethernet device support"
+
+config NET_PICO_SUPPORT_IPV4
+	bool "ipv4 support"
+
+if NET_PICO_SUPPORT_IPV4
+
+config NET_PICO_SUPPORT_IPV4FRAG
+	bool "ip fragmentation support"
+
+config NET_PICO_SUPPORT_ICMP4
+	bool "icmp support"
+
+config NET_PICO_SUPPORT_TCP
+	bool "tcp support"
+
+config NET_PICO_SUPPORT_UDP
+	bool "udp support"
+
+config NET_PICO_SUPPORT_DEVLOOP
+	bool "loopback device support"
+
+config NET_PICO_SUPPORT_DHCP_CLIENT
+	bool "dhcp client support"
+
+config NET_PICO_SUPPORT_DHCP_SERVER
+	bool "dhcp server support"
+
+config NET_PICO_SUPPORT_TFTP
+	bool "tftp support"
+
+endif
+
+endif
