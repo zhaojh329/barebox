@@ -40,6 +40,7 @@
 #include <magicvar.h>
 #include <linux/ctype.h>
 #include <linux/err.h>
+#include <pico_stack.h>
 
 unsigned char *NetRxPackets[PKTBUFSRX]; /* Receive packets		*/
 static unsigned int net_ip_id;
@@ -619,6 +620,9 @@ int net_receive(struct eth_device *edev, unsigned char *pkt, int len)
 		ret = 0;
 		goto out;
 	}
+
+	if (IS_ENABLED(CONFIG_NET_PICOTCP))
+		return pico_stack_recv(edev->picodev, pkt, len);
 
 	switch (et_protlen) {
 	case PROT_ARP:

@@ -33,6 +33,7 @@
 #include <environment.h>
 #include <linux/ctype.h>
 #include <linux/stat.h>
+#include <picotcp.h>
 
 static uint64_t last_link_check;
 
@@ -417,6 +418,11 @@ int eth_register(struct eth_device *edev)
 	if (IS_ENABLED(CONFIG_OFDEVICE) && edev->parent &&
 			edev->parent->device_node)
 		edev->nodepath = xstrdup(edev->parent->device_node->full_name);
+
+#ifdef CONFIG_NET_PICOTCP
+	eth_check_open(edev);
+	pico_adapter_init(edev);
+#endif
 
 	return 0;
 }

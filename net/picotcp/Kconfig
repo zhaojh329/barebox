@@ -1,10 +1,12 @@
 if NET_PICOTCP
 
 config NET_PICO_SUPPORT_ETH
-	bool "ethernet device support"
+	bool
+	default y
 
 config NET_PICO_SUPPORT_IPV4
-	bool "ipv4 support"
+	bool
+	default y
 
 if NET_PICO_SUPPORT_IPV4
 
