@@ -10,3 +10,8 @@ obj-$(CONFIG_NET_NETCONSOLE) += netconsole.o
 obj-$(CONFIG_NET_IFUP)	+= ifup.o
 
 obj-$(CONFIG_NET_PICOTCP) += picotcp.o picotcp/
+
+obj-$(CONFIG_CMD_PICO_DHCP)  += pico_dhcp.o
+ifneq ($(CONFIG_NET_PICO_SUPPORT_UDP),)
+CFLAGS += -DPICO_SUPPORT_UDP
+endif

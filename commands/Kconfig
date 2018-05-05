@@ -1210,6 +1210,12 @@ config CMD_IP_ROUTE_GET
 	  be shown on the command line or alternatively a variable is set to
 	  the result.
 
+config CMD_PICO_DHCP
+	tristate
+	depends on NET_PICO_SUPPORT_UDP && !CMD_DHCP
+	select NET_PICO_SUPPORT_DHCP_CLIENT
+	prompt "pico dhcp"
+
 # end Network commands
 endmenu
 
