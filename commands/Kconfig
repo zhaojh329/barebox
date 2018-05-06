@@ -1225,6 +1225,11 @@ config CMD_PICO_PING
 
 	  Usage: ping DESTINATION
 
+config CMD_PICO_WGET
+	tristate
+	depends on NET_PICO_SUPPORT_TCP
+	prompt "pico wget"
+
 # end Network commands
 endmenu
 
