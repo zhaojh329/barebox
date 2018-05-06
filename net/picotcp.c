@@ -8,7 +8,8 @@ static int pico_adapter_send(struct pico_device *dev, void *buf, int len)
 {
 	struct pico_device_barebox_eth *t = (struct pico_device_barebox_eth *)dev;
 
-	return eth_send(t->edev, buf, len);
+	eth_send(t->edev, buf, len);
+	return len;
 }
 
 static int pico_adapter_poll(struct pico_device *dev, int loop_score)
