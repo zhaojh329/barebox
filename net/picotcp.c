@@ -6,10 +6,12 @@
 
 static int pico_adapter_send(struct pico_device *dev, void *buf, int len)
 {
+	int ret;
 	struct pico_device_barebox_eth *t = (struct pico_device_barebox_eth *)dev;
 
-	eth_send(t->edev, buf, len);
-	return len;
+	ret = eth_send(t->edev, buf, len);
+
+	return ret ? ret : len;
 }
 
 static int pico_adapter_poll(struct pico_device *dev, int loop_score)
