@@ -1216,6 +1216,15 @@ config CMD_PICO_DHCP
 	select NET_PICO_SUPPORT_DHCP_CLIENT
 	prompt "pico dhcp"
 
+config CMD_PICO_PING
+	tristate
+	depends on NET_PICO_SUPPORT_ICMP4 && !CMD_PING
+	prompt "pico ping"
+	help
+	  Send ICMP echo requests.
+
+	  Usage: ping DESTINATION
+
 # end Network commands
 endmenu
 

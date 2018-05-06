@@ -15,3 +15,8 @@ obj-$(CONFIG_CMD_PICO_DHCP)  += pico_dhcp.o
 ifneq ($(CONFIG_NET_PICO_SUPPORT_UDP),)
 CFLAGS += -DPICO_SUPPORT_UDP
 endif
+
+obj-$(CONFIG_CMD_PICO_PING)  += pico_ping.o
+ifneq ($(CONFIG_NET_PICO_SUPPORT_UDP),)
+CFLAGS += -DPICO_SUPPORT_UDP
+endif
