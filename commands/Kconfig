@@ -1234,6 +1234,10 @@ config CMD_PICO_IFCONFIG
 	tristate
 	prompt "pico ifconfig"
 
+config CMD_PICO_HTTPD
+	tristate
+	prompt "pico httpd"
+
 # end Network commands
 endmenu
 
