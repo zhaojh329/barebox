@@ -13,7 +13,8 @@ enum {
 
 static bool done;
 static int state;
-static char write_buf[4096];
+static char write_buf[2048];
+static char buf1[1024] = "";
 static int writed, write_buf_len;
 static struct pico_socket *cli;
 
@@ -61,7 +62,7 @@ static void cb_http(uint16_t ev, struct pico_socket *s)
 					return;
 				}
 
-				if (!strncmp(line, "GET ", 4)) {
+				if (strncmp(line, "GET ", 4)) {
 					pico_socket_close(s);
 					return;
 				}
@@ -92,19 +93,17 @@ static void cb_http(uint16_t ev, struct pico_socket *s)
 					return;
 
 				if (!strcmp(line, "\r\n")) {
-					struct stat st;
-
-					lstat("/env/index.html", &st);
-
-					len = sprintf(write_buf, "HTTP/1.1 200 OK\r\n"
-						"Server: picotcp in barebox\r\n"
-						"Content-Type: text/html\r\n"
-						"Content-Length: %llu\r\n\r\n", st.st_size);
+					state = READ_START_LINE;
 
 					fd = open("/env/index.html", O_RDONLY);
-					len += read(fd, write_buf + len, sizeof(write_buf) - len);
+					len = read(fd, buf1, sizeof(buf1));
 					close(fd);
-					write_buf_len = len;
+
+					write_buf_len = sprintf(write_buf, "HTTP/1.1 200 OK\r\n"
+						"Server: picotcp in barebox\r\n"
+						"Content-Type: text/html\r\n"
+						"Content-Length: %d\r\n\r\n%s", len, buf1);
+
 					writed = 0;
 					send_data(s);
 					return;
