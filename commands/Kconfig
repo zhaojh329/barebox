@@ -1230,6 +1230,10 @@ config CMD_PICO_WGET
 	depends on NET_PICO_SUPPORT_TCP
 	prompt "pico wget"
 
+config CMD_PICO_IFCONFIG
+	tristate
+	prompt "pico ifconfig"
+
 # end Network commands
 endmenu
 

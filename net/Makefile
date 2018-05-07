@@ -18,3 +18,4 @@ endif
 
 obj-$(CONFIG_CMD_PICO_PING)  += pico_ping.o
 obj-$(CONFIG_CMD_PICO_WGET)  += pico_wget.o
+obj-$(CONFIG_CMD_PICO_IFCONFIG)  += pico_ifconfig.o
