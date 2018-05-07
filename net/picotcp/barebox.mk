@@ -26,6 +26,10 @@ ifneq ($(CONFIG_NET_PICO_SUPPORT_UDP),)
   include $(srctree)/net/picotcp/rules/udp.mk
 endif
 
+ifneq ($(CONFIG_NET_PICO_SUPPORT_MCAST),)
+  include $(srctree)/net/picotcp/rules/mcast.mk
+endif
+
 ifneq ($(CONFIG_NET_PICO_SUPPORT_DEVLOOP),)
   include $(srctree)/net/picotcp/rules/devloop.mk
 endif
