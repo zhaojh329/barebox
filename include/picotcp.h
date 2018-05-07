@@ -9,5 +9,7 @@ struct pico_device_barebox_eth {
 };
 
 void pico_adapter_init(struct eth_device *edev);
+int pico_adapter_param_set_ip(struct param_d *param, void *priv);
+int pico_adapter_param_set_ethaddr(struct param_d *param, void *priv);
 
 #endif

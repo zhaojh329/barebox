@@ -275,12 +275,14 @@ int eth_rx(void)
 	return 0;
 }
 
+#ifndef CONFIG_NET_PICOTCP
 static int eth_param_set_ethaddr(struct param_d *param, void *priv)
 {
 	struct eth_device *edev = priv;
 
 	return eth_set_ethaddr(edev, edev->ethaddr);
 }
+#endif
 
 #ifdef CONFIG_OFTREE
 static void eth_of_fixup_node(struct device_node *root,
@@ -383,12 +385,22 @@ int eth_register(struct eth_device *edev)
 
 	edev->devname = xstrdup(dev_name(&edev->dev));
 
+#ifdef CONFIG_NET_PICOTCP
+	dev_add_param_ip(dev, "ipaddr", pico_adapter_param_set_ip, NULL, &edev->ipaddr, edev);
+#else
 	dev_add_param_ip(dev, "ipaddr", NULL, NULL, &edev->ipaddr, edev);
+#endif
 	dev_add_param_ip(dev, "serverip", NULL, NULL, &net_serverip, edev);
 	dev_add_param_ip(dev, "gateway", NULL, NULL, &net_gateway, edev);
+#ifdef CONFIG_NET_PICOTCP
+	dev_add_param_ip(dev, "netmask", pico_adapter_param_set_ip, NULL, &edev->netmask, edev);
+	dev_add_param_mac(dev, "ethaddr", pico_adapter_param_set_ethaddr, NULL,
+				edev->ethaddr, edev);
+#else
 	dev_add_param_ip(dev, "netmask", NULL, NULL, &edev->netmask, edev);
 	dev_add_param_mac(dev, "ethaddr", eth_param_set_ethaddr, NULL,
-			edev->ethaddr, edev);
+				edev->ethaddr, edev);
+#endif
 	edev->bootarg = xstrdup("");
 	dev_add_param_string(dev, "linux.bootargs", NULL, NULL, &edev->bootarg, NULL);
 	edev->linuxdevname = xstrdup("");

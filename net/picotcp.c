@@ -4,6 +4,29 @@
 #include <picotcp.h>
 #include <pico_stack.h>
 
+int pico_adapter_param_set_ip(struct param_d *param, void *priv)
+{
+	struct eth_device *edev = priv;
+	struct pico_device *picodev = edev->picodev;
+	struct pico_ip4 address = {.addr = edev->ipaddr};
+	struct pico_ip4 netmask = {.addr = edev->netmask};
+
+	pico_ipv4_cleanup_links(picodev);
+	pico_ipv4_link_add(picodev, address, netmask);
+
+	return 0;
+}
+
+int pico_adapter_param_set_ethaddr(struct param_d *param, void *priv)
+{
+	struct eth_device *edev = priv;
+	struct pico_device *picodev = edev->picodev;
+
+	memcpy(picodev->eth->mac.addr, edev->ethaddr, ETH_ALEN);
+
+	return eth_set_ethaddr(edev, edev->ethaddr);
+}
+
 static int pico_adapter_send(struct pico_device *dev, void *buf, int len)
 {
 	int ret;
