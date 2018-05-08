@@ -1,0 +1,22 @@
+if MACH_MIPS_RALINK
+
+config ARCH_TEXT_BASE
+	hex
+	default 0xa0800000
+
+config SOC_RT305X
+	bool
+
+choice
+	prompt "Board type"
+
+config BOARD_GENERAL_RT5350
+	bool "General RT5350 Board"
+	select SOC_RT305X
+	select HAVE_PBL_IMAGE
+	select HAVE_IMAGE_COMPRESSION
+	select HAS_NMON
+
+endchoice
+
+endif

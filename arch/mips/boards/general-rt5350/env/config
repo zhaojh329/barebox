@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# network
+eth0.mode=static
+eth0.ipaddr=192.168.0.17
+eth0.netmask=255.255.255.0
+eth0.serverip=192.168.0.197

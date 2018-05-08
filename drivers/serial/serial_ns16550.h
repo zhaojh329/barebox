@@ -87,4 +87,16 @@
 
 #define MODE_X_DIV	16
 
+#if IS_ENABLED(CONFIG_MACH_MIPS_RALINK)
+#undef lsr
+#undef thr
+#undef dll
+#undef dlm
+
+#define lsr 7
+#define thr 1
+#define dll 11
+#define dlm 12
+#endif
+
 #endif				/*  __SERIAL_NS16550__H */

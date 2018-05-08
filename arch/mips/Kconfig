@@ -97,6 +97,22 @@ config MACH_MIPS_XBURST
 	select HAVE_IMAGE_COMPRESSION
 	select HAS_NMON
 	select GPIOLIB
+
+config MACH_MIPS_RALINK
+	bool "RT3x5x/RT5350 based boards"
+	select SYS_HAS_CPU_MIPS32_R2
+	select SYS_SUPPORTS_32BIT_KERNEL
+	select SYS_SUPPORTS_LITTLE_ENDIAN
+	select CSRC_R4K_LIB
+	select HAS_DEBUG_LL
+	select DRIVER_SERIAL_NS16550
+	select COMMON_CLK
+	select COMMON_CLK_OF_PROVIDER
+	select CLKDEV_LOOKUP
+	select OFTREE
+	select GPIOLIB
+	select ARCH_HAS_RESET_CONTROLLER
+
 endchoice
 
 source arch/mips/mach-malta/Kconfig
@@ -105,6 +121,7 @@ source arch/mips/mach-ath79/Kconfig
 source arch/mips/mach-bcm47xx/Kconfig
 source arch/mips/mach-loongson/Kconfig
 source arch/mips/mach-xburst/Kconfig
+source arch/mips/mach-ralink/Kconfig
 
 endmenu
 

@@ -50,6 +50,18 @@
 #define UART_LSR_DR     0x01    /* UART received data present */
 #define UART_LSR_THRE	0x20	/* Xmit holding register empty */
 
+#if IS_ENABLED(CONFIG_MACH_MIPS_RALINK)
+#undef UART_THR
+#undef UART_LSR
+#undef UART_DLL
+#undef UART_DLM
+
+#define UART_THR	(0x1 << DEBUG_LL_UART_SHIFT)
+#define UART_LSR	(0x7 << DEBUG_LL_UART_SHIFT)
+#define UART_DLL	(0x11 << DEBUG_LL_UART_SHIFT)
+#define UART_DLM	(0x12 << DEBUG_LL_UART_SHIFT)
+#endif
+
 #ifndef __ASSEMBLY__
 /*
  * C macros

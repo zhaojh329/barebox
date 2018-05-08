@@ -1,0 +1,208 @@
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "ralink,rt5350-soc";
+
+	cpus {
+		cpu@0 {
+			compatible = "mips,mips24KEc";
+		};
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,57600";
+	};
+
+	cpuintc: cpuintc@0 {
+		#address-cells = <0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+		compatible = "mti,cpu-interrupt-controller";
+	};
+
+	aliases {
+		spi0 = &spi0;
+		spi1 = &spi1;
+		serial0 = &uartlite;
+	};
+
+	palmbus {
+		compatible = "simple-bus";
+		ranges;
+
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		sysc: sysc@10000000 {
+			compatible = "ralink,rt5350-sysc", "ralink,rt3050-sysc", "syscon";
+			reg = <0x10000000 0x100>;
+		};
+
+		memc: memc@10000300 {
+			compatible = "ralink,rt5350-memc", "ralink,rt3050-memc";
+			reg = <0x10000300 0x100>;
+
+			resets = <&rstctrl 20>;
+			reset-names = "mc";
+		};
+
+		gpio0: gpio@10000600 {
+			compatible = "ralink,rt5350-gpio", "ralink,rt2880-gpio";
+			reg = <0x10000600 0x34>;
+
+			resets = <&rstctrl 13>;
+			reset-names = "pio";
+
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			ralink,gpio-base = <0>;
+			ralink,num-gpios = <22>;
+			ralink,register-map = [ 00 04 08 0c
+						20 24 28 2c
+						30 34 ];
+		};
+
+		gpio1: gpio@10000660 {
+			compatible = "ralink,rt5350-gpio", "ralink,rt2880-gpio";
+			reg = <0x10000660 0x24>;
+
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			ralink,gpio-base = <22>;
+			ralink,num-gpios = <6>;
+			ralink,register-map = [ 00 04 08 0c
+						10 14 18 1c
+						20 24 ];
+
+			status = "disabled";
+		};
+
+		spi0: spi@10000b00 {
+			compatible = "ralink,rt5350-spi", "ralink,rt2880-spi";
+			reg = <0x10000b00 0x40>;
+
+			resets = <&rstctrl 18>;
+			reset-names = "spi";
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&spi_pins>;
+
+			status = "disabled";
+		};
+
+		spi1: spi@10000b40 {
+			compatible = "ralink,rt5350-spi", "ralink,rt2880-spi";
+			reg = <0x10000b40 0x60>;
+
+			resets = <&rstctrl 18>;
+			reset-names = "spi";
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&spi_cs1>;
+
+			status = "disabled";
+		};
+
+		uartlite: uartlite@10000c00 {
+			compatible = "ralink,rt5350-uart", "ralink,rt2880-uart", "ns16550a";
+			reg = <0x10000c00 0x100>;
+
+			resets = <&rstctrl 19>;
+			reset-names = "uartl";
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&uartlite_pins>;
+
+			reg-shift = <2>;
+			reg-io-width = <1>;
+		};
+	};
+
+	pinctrl: pinctrl {
+		compatible = "ralink,rt2880-pinmux";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&state_default>;
+
+		state_default: pinctrl0 {
+		};
+
+		i2c_pins: i2c {
+			i2c {
+				ralink,group = "i2c";
+				ralink,function = "i2c";
+			};
+		};
+
+		spi_pins: spi {
+			spi {
+				ralink,group = "spi";
+				ralink,function = "spi";
+			};
+		};
+
+		phy_led_pins: phy_led {
+			phy_led {
+				ralink,group = "led";
+				ralink,function = "led";
+			};
+		};
+
+		uartlite_pins: uartlite {
+			uart {
+				ralink,group = "uartlite";
+				ralink,function = "uartlite";
+			};
+		};
+
+		uartf_pins: uartf {
+			uartf {
+				ralink,group = "uartf";
+				ralink,function = "uartf";
+			};
+		};
+
+		spi_cs1: spi1 {
+			spi1 {
+				ralink,group = "spi_cs1";
+				ralink,function = "spi_cs1";
+			};
+		};
+	};
+
+	rstctrl: rstctrl {
+		compatible = "ralink,rt5350-reset", "ralink,rt2880-reset";
+		#reset-cells = <1>;
+	};
+
+	clkctrl: clkctrl {
+		compatible = "ralink,rt2880-clock";
+		#clock-cells = <1>;
+	};
+
+	ethernet: ethernet@10100000 {
+		compatible = "ralink,rt5350-eth";
+		reg = <0x10100000 0x10000>;
+
+		resets = <&rstctrl 21 &rstctrl 23>;
+		reset-names = "fe", "esw";
+
+		mediatek,switch = <&esw>;
+	};
+
+	esw: esw@10110000 {
+		compatible = "ralink,rt5350-esw", "ralink,rt3050-esw";
+		reg = <0x10110000 0x8000>;
+
+		resets = <&rstctrl 23>;
+		reset-names = "esw";
+	};
+};
