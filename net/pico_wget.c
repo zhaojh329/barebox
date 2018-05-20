@@ -43,6 +43,11 @@ static char *read_line(struct pico_socket *s)
 
 static void cb_wget(uint16_t ev, struct pico_socket *s)
 {
+	if (ev & PICO_SOCK_EV_CONN) {
+		printf("connected.\n");
+		return;
+	}
+
 	if (ev & PICO_SOCK_EV_RD) {
 		while (1) {
 			if (state == READ_STATE_LINE) {
@@ -201,11 +206,13 @@ static int do_pico_wget(int argc, char *argv[])
 		sprintf(buf, ":%d", port);
 	sprintf(http_msg, "GET %s HTTP/1.1\r\nHost: %pI4%s\r\n\r\n", path, &daddr.addr, buf);
 
-	ret = pico_socket_connect(s, &daddr, port);
+	ret = pico_socket_connect(s, &daddr, short_be(port));
 	if (ret < 0) {
-		printf("connecting to %s:%d failed\n", &daddr.addr, port);
+		printf("connecting to %pI4:%d failed\n", &daddr.addr, port);
 		return -1;
 	}
+
+	printf("connecting to %pI4:%d...\n", &daddr.addr, port);
 
 	while (!done) {
 		if (ctrlc()) {
