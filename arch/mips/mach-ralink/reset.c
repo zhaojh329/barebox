@@ -1,6 +1,8 @@
 /*
  * Copyright (C) Jianhui Zhao <jianhuizhao329@gmail.com>
  *
+ * Based on Openwrt/Kernel
+ *
  * This file is part of barebox.
  * See file CREDITS for list of people who contributed to this project.
  *
@@ -18,6 +20,7 @@
 #include <common.h>
 #include <init.h>
 #include <restart.h>
+#include <linux/reset-controller.h>
 #include <mach/ralink_regs.h>
 
 /* Reset Control */
@@ -34,10 +37,67 @@ static void __noreturn ralink_restart_soc(struct restart_handler *rst)
 	/*NOTREACHED*/
 }
 
-static int restart_register_feature(void)
+static int ralink_assert_device(struct reset_controller_dev *rcdev,
+				unsigned long id)
 {
-	restart_handler_register_fn(ralink_restart_soc);
+	u32 val;
+
+	if (id < 8)
+		return -1;
+
+	val = rt_sysc_r32(SYSC_REG_RESET_CTRL);
+	val |= BIT(id);
+	rt_sysc_w32(val, SYSC_REG_RESET_CTRL);
 
 	return 0;
 }
-coredevice_initcall(restart_register_feature);
+
+static int ralink_deassert_device(struct reset_controller_dev *rcdev,
+				  unsigned long id)
+{
+	u32 val;
+
+	if (id < 8)
+		return -1;
+
+	val = rt_sysc_r32(SYSC_REG_RESET_CTRL);
+	val &= ~BIT(id);
+	rt_sysc_w32(val, SYSC_REG_RESET_CTRL);
+
+	return 0;
+}
+
+static int ralink_reset_device(struct reset_controller_dev *rcdev,
+			       unsigned long id)
+{
+	ralink_assert_device(rcdev, id);
+	return ralink_deassert_device(rcdev, id);
+}
+
+static struct reset_control_ops reset_ops = {
+	.reset = ralink_reset_device,
+	.assert = ralink_assert_device,
+	.deassert = ralink_deassert_device,
+};
+
+static struct reset_controller_dev reset_dev = {
+	.ops			= &reset_ops,
+	.nr_resets		= 32,
+	.of_reset_n_cells	= 1,
+};
+
+static int ralink_rst_init(void)
+{
+	restart_handler_register_fn(ralink_restart_soc);
+
+	reset_dev.of_node = of_find_compatible_node(NULL, NULL,
+						"ralink,rt2880-reset");
+	if (!reset_dev.of_node)
+		pr_err("Failed to find reset controller node");
+	else
+		reset_controller_register(&reset_dev);
+
+	return 0;
+}
+
+coredevice_initcall(ralink_rst_init);

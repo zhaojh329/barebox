@@ -1,0 +1,24 @@
+config DRIVER_NET_MEDIATEK
+	tristate "Mediatek/Ralink ethernet driver"
+	depends on MACH_MIPS_RALINK
+	help
+	  This driver supports the ethernet mac inside the Mediatek and Ralink WiSoCs
+
+config NET_MEDIATEK_SOC
+	def_tristate DRIVER_NET_MEDIATEK
+
+if NET_MEDIATEK_SOC
+choice
+	prompt "MAC type"
+
+config NET_MEDIATEK_RT3050
+	bool "RT3050/MT7628"
+	depends on MIPS && SOC_RT305X
+
+endchoice
+
+config NET_MEDIATEK_ESW_RT3050
+	def_tristate NET_MEDIATEK_SOC
+	depends on NET_MEDIATEK_RT3050
+
+endif

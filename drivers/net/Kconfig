@@ -244,6 +244,7 @@ config TSE_USE_DEDICATED_DESC_MEM
 	  reserved with a malloc but directly mapped to the memory
 	  address (defined in config.h)
 
+source "drivers/net/mtk/Kconfig"
 source "drivers/net/phy/Kconfig"
 source "drivers/net/usb/Kconfig"
 

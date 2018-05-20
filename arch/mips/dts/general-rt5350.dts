@@ -9,3 +9,8 @@
 	compatible = "general,rt5350", "ralink,rt5350-soc";
 	model = "General RT5350";
 };
+
+&esw {
+	mediatek,portmap = <0x3f>;
+	mediatek,portdisable = <0x3e>;
+};
